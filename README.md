@@ -39,3 +39,49 @@ While the ultimate solution is to encourage people not to litter in the first pl
     - Integrate navigation, vision, mowing (if applicable), and litter handling into a cohesive system.
     - Test the robot's full functionality in real-world environments like parks or urban streets.
     - Iterate on the design to improve reliability and efficiency.
+    - 
+## Hardware
+
+This section provides a detailed Bill of Materials (BOM) for the mechanical and electrical components used in the robot design.
+
+---
+
+### **Mechanical Components**
+| ITEM NO. | PART NUMBER       | DESCRIPTION                                                  | QTY. | NOTES                |
+|----------|-------------------|--------------------------------------------------------------|------|----------------------|
+| 1        | BASE              | BASE                                                        | 1    | Main robot platform  |
+| 2        | 19525T13          | Nonmarking High-Temperature Swivel Caster                   | 1    |                     |
+| 3        | CASTER SPACER     | CASTER SPACER                                               | 1    |                     |
+| 4        | HUBWHEEL          | HUBWHEEL                                                    | 2    |                     |
+| 5        | TIRE 10IN         | TIRE 10IN                                                   | 2    |                     |
+| 6        | HUBWHEEL SHAFT    | HUBWHEEL SHAFT                                              | 2    |                     |
+| 7        | HUBWHEEL MOUNT    | HUBWHEEL MOUNT                                              | 2    |                     |
+| 8        | HUBWHEEL MOUNT CLAMP | HUBWHEEL MOUNT CLAMP                                       | 2    |                     |
+| 9        | 91502A135         | Blue-Dyed Zinc-Plated Alloy Steel Socket Head Screw (M4x50) | 8    | For frame assembly  |
+| 10       | 94645A101         | High-Strength Steel Nylon-Insert Locknut (M4)               | 8    | For frame assembly  |
+| 11       | 91502A132         | Blue-Dyed Zinc-Plated Alloy Steel Socket Head Screw (M4x35) | 4    |                     |
+| 12       | 90591A255         | Zinc-Plated Steel Hex Nut (M4)                              | 8    |                     |
+| 13       | 90128A215         | Zinc-Plated Alloy Steel Socket Head Screw (M4x16)           | 4    |                     |
+| 14       | 90128A268         | Zinc-Plated Alloy Steel Socket Head Screw (M6x40)           | 4    |                     |
+| 15       | 94645A205         | Zinc-Plated Steel Hex Nut (M6)                              | 4    |                     |
+
+---
+
+### **Electrical Components**
+
+| ITEM NO. | COMPONENT                  | DESCRIPTION                                                                                 | PURCHASE LINK                                                                                                  | NOTES                                      |
+|----------|----------------------------|---------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------|--------------------------------------------|
+| 1        | Battery Adapter            | Multi-Functional USB Charger Adapter with 2 USB Ports, 1 Type-C Port, and DC XT60 Port      | [Amazon](https://www.amazon.com/)                                                                             | For Milwaukee M18 battery                  |
+| 2        | Battery                    | Milwaukee M18 Lithium Battery                                                              | [Milwaukee](https://www.milwaukeetool.com/)                                                                   | Primary power source. Drill batteries are readily available and reliable. Could consider different power sources in the future. |
+| 3        | Main Controller            | Raspberry Pi 5 (8GB)                                                                       | [Raspberry Pi](https://www.raspberrypi.org/)                                                                  | Handles navigation and computer vision processing tasks. |
+| 4        | Microcontroller            | Raspberry Pi Pico 2 W                                                                      | [Raspberry Pi](https://www.raspberrypi.org/)                                                                  | For low-level motor and sensor control.     |
+| 5        | Motor Controller           | JYQD_YL02D 12-36VDC Electric Scooter Controller                                            | [Controller Link](https://www.example.com/)                                                                   | Controls hub wheel motors. Budget option, potential upgrade in the future. |
+| 6        | Motors                     | 10-inch 360W Hub Wheel Motors (2 units)                                                    | [Hub Motors](https://www.example.com/)                                                                        | Primary propulsion system for the robot. |
+
+---
+
+### **Notes**
+- **Mechanical Components**: Designed for durability and modularity to handle outdoor environments.
+- **Battery Considerations**: The Milwaukee M18 Lithium Battery offers a reliable and accessible solution. Future iterations may explore alternative power sources to improve efficiency or runtime.
+- **Motor Controller**: The current motor controller is a budget-friendly choice. Future upgrades could enhance performance and enable additional features.
+- **System Modularity**: The electrical system is designed to be modular, allowing for easy replacement and future upgrades of individual components.- Purchase links are placeholders and should be updated with specific vendor links for your components.
