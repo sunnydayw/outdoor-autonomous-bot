@@ -85,3 +85,40 @@ This section provides a detailed Bill of Materials (BOM) for the mechanical and 
 - **Battery Considerations**: The Milwaukee M18 Lithium Battery offers a reliable and accessible solution. Future iterations may explore alternative power sources to improve efficiency or runtime.
 - **Motor Controller**: The current motor controller is a budget-friendly choice. Future upgrades could enhance performance and enable additional features.
 - **System Modularity**: The electrical system is designed to be modular, allowing for easy replacement and future upgrades of individual components.- Purchase links are placeholders and should be updated with specific vendor links for your components.
+
+## Software
+
+The software architecture is designed with a modular approach to separate low-level control and high-level control, ensuring efficient processing and scalability.
+
+### **Overview**
+The software is divided into two primary layers:
+1. **Low-Level Control**:
+   - Responsible for precise motor control (e.g., rotations, speed, and direction).
+   - Runs on a microcontroller (e.g., Raspberry Pi Pico 2 W) to offload tasks from the main controller.
+
+2. **High-Level Control**:
+   - Handles navigation, path planning, and integration with task-specific modules like computer vision and robotic arm control.
+   - Runs on the Raspberry Pi 5 using ROS 2.
+
+---
+
+### **Details**
+1. [Low-Level Control](docs/hubmotor_low_level_control.md)
+   - Focuses on motor control algorithms and GPIO handling.
+   - Includes methods for converting angular and linear velocity commands into motor outputs.
+
+2. [High-Level Control](docs/high_level_control.md)
+   - Outlines the use of ROS 2 for navigation and task coordination.
+   - Discusses communication between the main controller and the low-level controller.
+
+---
+
+### **Current Progress**
+- **Low-Level Control**:
+    - Developing scripts to control motor rotation and drive the robot specific distances.
+    - Testing and fine-tuning foundational low-level control algorithms to ensure precise and repeatable movement.
+
+- **High-Level Control**:
+  - TBD
+
+---
