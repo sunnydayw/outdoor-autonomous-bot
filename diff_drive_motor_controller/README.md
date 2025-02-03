@@ -75,4 +75,4 @@ This section covers the implementation of the differential drive controller, inc
 
 ---
 
-This implementation is still under development. Feedback and further tuning are welcome to optimize performance and integration with your final robot system.
+This implementation is still under development.
