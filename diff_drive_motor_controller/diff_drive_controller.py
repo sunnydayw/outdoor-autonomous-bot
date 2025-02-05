@@ -8,9 +8,7 @@ It also implements a cmd_vel timeout feature to stop the motors if no new comman
 """
 
 import time
-import math
-import uasyncio as asyncio
-from config import WHEEL_RADIUS, WHEEL_SEPARATION, CMD_VEL_TIMEOUT
+from config import WHEEL_CIRCUMFERENCE, WHEEL_SEPARATION, CMD_VEL_TIMEOUT
 
 class DiffDriveController:
     def __init__(self, left_motor, right_motor):
@@ -30,6 +28,10 @@ class DiffDriveController:
 
         # Timeout for cmd_vel (in milliseconds).
         self.cmd_vel_timeout = CMD_VEL_TIMEOUT
+
+        # Tracking for debugging and PID tuning
+        self.last_target_rpm = (0, 0)
+        self.last_actual_rpm = (0, 0)
 
     def update_cmd_vel(self, linear, angular):
         """
@@ -55,29 +57,59 @@ class DiffDriveController:
         """
         v_left = self.linear - (self.angular * WHEEL_SEPARATION / 2)
         v_right = self.linear + (self.angular * WHEEL_SEPARATION / 2)
-        rpm_left = (v_left * 60) / (2 * math.pi * WHEEL_RADIUS)
-        rpm_right = (v_right * 60) / (2 * math.pi * WHEEL_RADIUS)
+        rpm_left = int((v_left * 60) / WHEEL_CIRCUMFERENCE)
+        rpm_right = int((v_right * 60) / WHEEL_CIRCUMFERENCE)
+        
+        self.last_target_rpm = (rpm_left, rpm_right)  # Store for status reporting
         return rpm_left, rpm_right
+    
+    def update_motors(self):
+        """
+        Compute and set motor speeds based on cmd_vel.
+        If timeout occurs, stop motors.
+        """
+        # Check if command has timed out
+        current_time = time.ticks_ms()
+        if time.ticks_diff(current_time, self.last_cmd_time) > self.cmd_vel_timeout:
+            self.left_motor.set_target_rpm(0)
+            self.right_motor.set_target_rpm(0)
+            return
 
-    async def control_loop(self):
+        # Compute new wheel RPMs
+        rpm_left, rpm_right = self.compute_wheel_rpms()
+
+        # Send commands to motors
+        self.left_motor.set_target_rpm(rpm_left)
+        self.right_motor.set_target_rpm(rpm_right)
+
+        # Store last actual RPMs for monitoring
+        self.last_actual_rpm = (self.left_motor.read_rpm(), self.right_motor.read_rpm())
+
+    def get_status(self, print_status=False, STATUS_UPDATE_INTERVAL=500):
         """
-        Non-blocking control loop that:
-          - Checks for cmd_vel timeout (stopping motors if no command is received).
-          - Converts desired cmd_vel into target wheel RPMs.
-          - Commands the motors using their asynchronous set_rpm_async() functions.
+        Return a dictionary of current control parameters for debugging.
+        Updates only if STATUS_UPDATE_INTERVAL has elapsed.
+        
+        :param print_status: If True, prints the status.
         """
-        while True:
-            current_time = time.ticks_ms()
-            # If no new cmd_vel command within timeout, stop motors.
-            if time.ticks_diff(current_time, self.last_cmd_time) > self.cmd_vel_timeout:
-                await asyncio.gather(
-                    self.left_motor.set_rpm_async(0, run_time=0.05),
-                    self.right_motor.set_rpm_async(0, run_time=0.05)
-                )
-            else:
-                rpm_left, rpm_right = self.compute_wheel_rpms()
-                await asyncio.gather(
-                    self.left_motor.set_rpm_async(rpm_left, run_time=0.05),
-                    self.right_motor.set_rpm_async(rpm_right, run_time=0.05)
-                )
-            await asyncio.sleep_ms(50)
+        current_time = time.ticks_ms()
+        if time.ticks_diff(current_time, self.last_status_update) < STATUS_UPDATE_INTERVAL:
+            return  # Skip update if interval hasn't passed
+
+        self.last_status_update = current_time  # Update last update time
+        timed_out = time.ticks_diff(current_time, self.last_cmd_time) > self.cmd_vel_timeout
+
+        status = {
+            "target_rpm_left": round(self.last_target_rpm[0], 2),
+            "target_rpm_right": round(self.last_target_rpm[1], 2),
+            "actual_rpm_left": round(self.last_actual_rpm[0], 2),
+            "actual_rpm_right": round(self.last_actual_rpm[1], 2),
+            "cmd_vel_timeout": timed_out
+        }
+
+        if print_status:
+            print(f"[STATUS] Left: {status['actual_rpm_left']} RPM / {status['target_rpm_left']} Target, "
+                  f"Right: {status['actual_rpm_right']} RPM / {status['target_rpm_right']} Target, "
+                  f"Timeout: {status['cmd_vel_timeout']}")
+
+        return status
