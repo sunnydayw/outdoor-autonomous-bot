@@ -4,6 +4,7 @@ config.py
 Configuration file for the robot's motor control, encoder parameters, PID settings,
 and robot geometry. All units are in SI unless noted otherwise.
 """
+import math
 
 # ===== PWM Settings =====
 PWM_FREQ = 1000  # PWM frequency in Hz
@@ -29,7 +30,6 @@ offset = 6116  # Constant offset for feed-forward
 SLEW_MAX_DELTA = 10000  # Maximum allowed change in PWM output per control loop iteration
 
 # ===== Timeout Settings =====
-MAX_RUN_TIME_MS = 30000  # Maximum run time for control loops (in milliseconds)
 CMD_VEL_TIMEOUT = 500    # Timeout (in milliseconds) for cmd_vel commands
 
 # ===== Robot Geometry =====
@@ -39,6 +39,7 @@ WHEEL_RADIUS_INCH = 10
 WHEEL_SEPARATION_INCH = 19
 WHEEL_RADIUS = WHEEL_RADIUS_INCH * 0.0254        # Wheel radius in meters (~0.254 m)
 WHEEL_SEPARATION = WHEEL_SEPARATION_INCH * 0.0254  # Distance between wheels in meters (~0.4826 m)
+WHEEL_CIRCUMFERENCE = 2 * math.pi *WHEEL_RADIUS
 
 # ===== Motor Pin Assignments =====
 # Adjust these based on your wiring.
