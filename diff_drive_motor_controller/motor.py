@@ -9,10 +9,10 @@ Both blocking and asynchronous (non-blocking) set_rpm functions are provided.
 
 import time
 from machine import Pin, PWM
-from config import PWM_FREQ, FULL_DUTY, MIN_DUTY, MAX_DUTY, PID, Kff, offset, SLEW_MAX_DELTA, MAX_RUN_TIME_MS
+from config import PWM_FREQ, FULL_DUTY, MIN_DUTY, MAX_DUTY, PID, Kff, offset, SLEW_MAX_DELTA
 
 class Motor:
-    def __init__(self, direction_pin, speed_pin, brake_pin, encoder, reverse_dir=False):
+    def __init__(self, direction_pin, speed_pin, brake_pin, encoder, invert=False):
         """
         Initialize the Motor.
         
@@ -20,13 +20,13 @@ class Motor:
         :param speed_pin: GPIO pin for PWM speed control.
         :param brake_pin: GPIO pin for brake control.
         :param encoder: Encoder instance for feedback.
-        :param reverse_dir: Boolean indicating if the motor is installed in reverse.
+        :param invert: Boolean, set True if motor direction is reversed.
         """
         self.direction = Pin(direction_pin, Pin.OUT)
         self.speed_pwm = PWM(Pin(speed_pin))
         self.brake_pwm = PWM(Pin(brake_pin))
         self.encoder = encoder
-        self.reverse_dir = reverse_dir
+        self.invert = invert
 
         # Initialize PWM channels.
         self.speed_pwm.freq(PWM_FREQ)
@@ -34,152 +34,90 @@ class Motor:
         self.brake_pwm.duty_u16(0)  # Release brake.
 
         # Set initial motor direction.
-        self.direction.value(0 if reverse_dir else 1)
+        self.direction.value(0 if invert else 1)
 
         # Set PID gains.
         self.Kp = PID["Kp"]
         self.Ki = PID["Ki"]
         self.Kd = PID["Kd"]
 
-    def set_power(self, percent_power):
-        """
-        Open-loop control: Set the motor power to a specified percentage.
-        
-        :param percent_power: Desired power level (0 to 100).
-        """
-        desired_duty = int((percent_power / 100.0) * FULL_DUTY)
-        if desired_duty > MAX_DUTY:
-            desired_duty = MAX_DUTY
-        if 0 < desired_duty < MIN_DUTY:
-            desired_duty = MIN_DUTY
-        self.speed_pwm.duty_u16(desired_duty)
+        # Feed-forward parameters
+        self.Kff = Kff
+        self.offset = offset
 
-    def set_rpm(self, target_rpm, run_time=None):
+        # Control state variables
+        self.target_rpm = 0.0
+        self.integral = 0.0
+        self.last_error = 0.0
+        self.last_output = 0.0
+        self.last_time = time.ticks_ms()
+
+    def set_target_rpm(self, rpm):
         """
-        Blocking closed-loop control: Run the motor at the specified RPM using PID with feed-forward.
-        Negative target_rpm indicates reverse motion (adjusting for reverse_dir).
-        This function blocks until run_time seconds have elapsed.
-        
-        :param target_rpm: Desired RPM (negative for reverse).
-        :param run_time: Duration in seconds to run the control loop (None for indefinite).
+        Set the desired RPM for this motor.
+        :param rpm: Target RPM.
         """
-        if target_rpm < 0:
-            desired_direction = 0 if not self.reverse_dir else 1
-            target_rpm = -target_rpm  # Use absolute value.
+        # Set direction based on RPM sign
+        if rpm < 0:
+            desired_direction = 0 if not self.invert else 1
+            target_rpm = -rpm  # Use absolute value.
         else:
-            desired_direction = 1 if not self.reverse_dir else 0
+            desired_direction = 1 if not self.invert else 0
         self.direction.value(desired_direction)
-        self.encoder.reset()
 
-        integral = 0.0
-        last_error = 0.0
-        start_time = time.ticks_ms()
-        last_time = start_time
-        last_output = 0
+        self.target_rpm = abs(rpm)
 
-        while run_time is None or time.ticks_diff(time.ticks_ms(), start_time) < run_time * 1000:
-            current_time = time.ticks_ms()
-            dt = time.ticks_diff(current_time, last_time) / 1000.0
-            if dt < 0.02:
-                continue
-            last_time = current_time
-
-            measured_rpm = self.encoder.get_rpm()
-            error = target_rpm - measured_rpm
-
-            integral += error * dt
-            derivative = (error - last_error) / dt
-            last_error = error
-
-            pid_output = self.Kp * error + self.Ki * integral + self.Kd * derivative
-            feed_forward = Kff * target_rpm + offset
-            output = feed_forward + pid_output
-
-            if output < 0:
-                output = 0
-            if output > FULL_DUTY:
-                output = FULL_DUTY
-            elif 0 < output < MIN_DUTY:
-                output = MIN_DUTY
-
-            # Apply slew-rate limiting.
-            delta = output - last_output
-            if delta > SLEW_MAX_DELTA:
-                output = last_output + SLEW_MAX_DELTA
-            elif delta < -SLEW_MAX_DELTA:
-                output = last_output - SLEW_MAX_DELTA
-            last_output = output
-
-            self.speed_pwm.duty_u16(int(output))
-            time.sleep_ms(20)
-
+    def brake(self):
         # Stop the motor.
         self.speed_pwm.duty_u16(0)
         self.brake_pwm.duty_u16(FULL_DUTY)
         time.sleep(0.5)
         self.brake_pwm.duty_u16(0)
 
-    async def set_rpm_async(self, target_rpm, run_time=None):
+    def update(self):
         """
-        Asynchronous (non-blocking) closed-loop control: Run the motor at the specified RPM.
-        Negative target_rpm indicates reverse motion. This coroutine yields control periodically.
-        
-        :param target_rpm: Desired RPM (negative for reverse).
-        :param run_time: Duration in seconds for the control loop (None for indefinite).
+        Call this regularly (e.g. in a loop) to update motor PWM based on 
+        the current encoder reading and the target RPM using PID + feed-forward.
         """
-        import uasyncio as asyncio
-        if target_rpm < 0:
-            desired_direction = 0 if not self.reverse_dir else 1
-            target_rpm = -target_rpm
-        else:
-            desired_direction = 1 if not self.reverse_dir else 0
-        self.direction.value(desired_direction)
-        self.encoder.reset()
+        current_rpm = self.encoder.get_rpm()
+        current_time = time.ticks_ms()
+        dt = time.ticks_diff(current_time, self.last_time) / 1000.0  # Seconds
 
-        integral = 0.0
-        last_error = 0.0
-        start_time = time.ticks_ms()
-        last_time = start_time
-        last_output = 0
+        if dt <= 0.01 or self.target_rpm == 0:
+            return
 
-        while run_time is None or time.ticks_diff(time.ticks_ms(), start_time) < run_time * 1000:
-            current_time = time.ticks_ms()
-            dt = time.ticks_diff(current_time, last_time) / 1000.0
-            if dt < 0.02:
-                await asyncio.sleep_ms(10)
-                continue
-            last_time = current_time
+        # --- PID Error Terms ---
+        error = self.target_rpm - current_rpm
+        self.integral += error * dt
+        derivative = (error - self.last_error) / dt
 
-            measured_rpm = self.encoder.get_rpm()
-            error = target_rpm - measured_rpm
+        # --- PID Control Output ---
+        pid_output = (self.Kp * error) + (self.Ki * self.integral) + (self.Kd * derivative)
 
-            integral += error * dt
-            derivative = (error - last_error) / dt
-            last_error = error
+        # --- Feed-Forward Term ---
+        #   feed_forward = Kff * (desired_rpm) + offset
+        feed_forward = (self.Kff * self.target_rpm) + self.offset
 
-            pid_output = self.Kp * error + self.Ki * integral + self.Kd * derivative
-            feed_forward = Kff * target_rpm + offset
-            output = feed_forward + pid_output
+        # --- Combine PID and Feed-Forward ---
+        raw_output = feed_forward + pid_output
 
-            if output < 0:
-                output = 0
-            if output > FULL_DUTY:
-                output = FULL_DUTY
-            elif 0 < output < MIN_DUTY:
-                output = MIN_DUTY
+        # --- Slew-Rate Limit ---
+        delta = raw_output - self.last_output
+        if delta > SLEW_MAX_DELTA:
+            output = SLEW_MAX_DELTA
+        elif delta < -SLEW_MAX_DELTA:
+            output = -SLEW_MAX_DELTA
+        output = self.last_output + delta
 
-            delta = output - last_output
-            if delta > SLEW_MAX_DELTA:
-                output = last_output + SLEW_MAX_DELTA
-            elif delta < -SLEW_MAX_DELTA:
-                output = last_output - SLEW_MAX_DELTA
-            last_output = output
+        # --- Clamp to PWM Range ---
+        #   Could be positive or negative (for direction).
+        # output = int(max(min(output, MAX_DUTY), MIN_DUTY)) # might not want to calmp the minium for now
+        output = int(min(output, MAX_DUTY))
 
-            self.speed_pwm.duty_u16(int(output))
-            await asyncio.sleep_ms(20)
+        # --- Set PWM ---
+        self.speed_pwm.duty_u16(int(output))
 
-        # Stop the motor.
-        self.speed_pwm.duty_u16(0)
-        self.brake_pwm.duty_u16(FULL_DUTY)
-        await asyncio.sleep(500)
-        self.brake_pwm.duty_u16(0)
+        # Update variables
+        self.last_error = error
+        self.last_output = output
+        self.last_time = current_time
