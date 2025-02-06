@@ -54,11 +54,22 @@ class Motor:
         self.last_output = 0
         self.last_time = time.ticks_ms()
         self._update_loop_time = 0 
+        self._current_rpm = 0  # Cached RPM value
 
     @property
     def update_loop_time(self):
         """Return the execution time of the last update loop in milliseconds."""
         return self._update_loop_time
+    
+    @property 
+    def current_rpm(self):
+        """Return the current RPM of the motor."""
+        return self._current_rpm
+    
+    def get_latest_rpm(self):
+        """Force an update of the encoder and return the latest RPM."""
+        self._current_rpm = self.encoder.update_rpm()
+        return self._current_rpm
     
     def set_target_rpm(self, rpm: int):
         """
@@ -91,7 +102,9 @@ class Motor:
         the current encoder reading and the target RPM using PID + feed-forward.
         """
         start_time = time.ticks_us()
-        current_rpm = self.encoder.update_rpm()
+        # Update and cache RPM
+        self._current_rpm = self.encoder.update_rpm()
+
         current_time = time.ticks_ms()
         dt_ms = time.ticks_diff(current_time, self.last_time)
 
@@ -102,7 +115,7 @@ class Motor:
         dt_sec = dt_ms / 1000.0  # Convert to seconds
 
         # --- PID Error Terms ---
-        error = self.target_rpm - current_rpm
+        error = self.target_rpm - self._current_rpm
 
         # --- Prevent Integral Windup ---
         if abs(error) < 100:  # Only integrate if error is reasonable
