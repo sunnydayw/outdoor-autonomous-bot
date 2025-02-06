@@ -34,7 +34,8 @@ class Motor:
         self.brake_pwm.duty_u16(0)  # Release brake.
 
         # Set initial motor direction
-        self.current_direction = 1 if not invert else 0
+        # if self.invert is False, then self.current_direction is assigned 1
+        self.current_direction = 1 if not self.invert else 0
         self.direction.value(self.current_direction)
 
         # Set PID gains.
@@ -53,18 +54,23 @@ class Motor:
         self.last_output = 0
         self.last_time = time.ticks_ms()
 
-    def set_target_rpm(self, rpm):
+    def set_target_rpm(self, rpm: int):
         """
         Set the desired RPM for this motor.
         :param rpm: Target RPM.
         """
         # Set direction based on RPM sign
         target_direction = 1 if rpm >= 0 else 0
+
+        # Flip direction if the motor is inverted
+        if self.invert:
+            target_direction = not target_direction  # Flip 0 → 1, 1 → 0
+
         if target_direction != self.current_direction:
             self.current_direction = target_direction
             self.direction.value(self.current_direction)
 
-        self.target_rpm = abs(int(rpm))  # Ensure it's an integer
+        self.target_rpm = abs(rpm)
 
     def brake(self):
         """Stop the motor using active braking for 1 second."""
