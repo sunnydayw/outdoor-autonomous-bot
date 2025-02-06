@@ -1,52 +1,95 @@
 """
 main.py
----------
-Main application for the differential drive robot.
-This module initializes the motors, encoders, and the diff drive controller,
-and starts the asynchronous control loop.
-It also contains a simulated cmd_vel publisher for testing purposes.
-
-For final deployment, you may replace the simulated cmd_vel source with a wired
-serial communication link or network interface, depending on your robot's setup.
-Both the Raspberry Pi and the Pico support network communication, and for a final
-setup you might use a direct serial (UART) connection between the devices.
+-------
+Example main program to demonstrate forward, backward, and in-place rotation
+using the DiffDriveController, Motor, and Encoder classes.
 """
 
-import uasyncio as asyncio
-from motor import Motor  # Motor class with both blocking and async methods.
+import time
+from machine import Pin
+from config import (
+    LEFT_MOTOR_SPEED_PIN, LEFT_MOTOR_DIRECTION_PIN, LEFT_MOTOR_BRAKE_PIN, LEFT_MOTOR_ENCODER_PIN,
+    RIGHT_MOTOR_SPEED_PIN, RIGHT_MOTOR_DIRECTION_PIN, RIGHT_MOTOR_BRAKE_PIN, RIGHT_MOTOR_ENCODER_PIN
+)
 from encoder import Encoder
+from motor import Motor
 from diff_drive_controller import DiffDriveController
-from config import (LEFT_MOTOR_DIRECTION_PIN, LEFT_MOTOR_SPEED_PIN, LEFT_MOTOR_BRAKE_PIN, LEFT_MOTOR_ENCODER_PIN,
-                    RIGHT_MOTOR_DIRECTION_PIN, RIGHT_MOTOR_SPEED_PIN, RIGHT_MOTOR_BRAKE_PIN, RIGHT_MOTOR_ENCODER_PIN)
 
-# Create encoder instances for left and right wheels.
-left_encoder = Encoder(LEFT_MOTOR_ENCODER_PIN, ticks_per_rev=90)
-right_encoder = Encoder(RIGHT_MOTOR_ENCODER_PIN, ticks_per_rev=90)
-
-# Create Motor instances.
-left_motor = Motor(LEFT_MOTOR_DIRECTION_PIN, LEFT_MOTOR_SPEED_PIN, LEFT_MOTOR_BRAKE_PIN, left_encoder, reverse_dir=False)
-right_motor = Motor(RIGHT_MOTOR_DIRECTION_PIN, RIGHT_MOTOR_SPEED_PIN, RIGHT_MOTOR_BRAKE_PIN, right_encoder, reverse_dir=True)
-
-# Create the differential drive controller.
-controller = DiffDriveController(left_motor, right_motor)
-
-async def simulate_cmd_vel():
-    """
-    Simulated cmd_vel publisher.
-    For testing, this coroutine publishes a constant linear velocity (in m/s) and angular velocity (in rad/s)
-    every 100 ms. Replace this with your actual communication code (e.g., serial or network) in the final setup.
-    """
-    while True:
-        linear = 0.2   # m/s (adjust as needed)
-        angular = 0.0  # rad/s (nonzero for turning)
-        controller.update_cmd_vel(linear, angular)
-        await asyncio.sleep(0.1)
-
-async def main():
-    # Run the simulated cmd_vel publisher and the diff drive control loop concurrently.
-    await asyncio.gather(
-        simulate_cmd_vel(),
-        controller.control_loop()
+def main():
+    # --- Create Encoders ---
+    left_encoder = Encoder(pin_num=LEFT_MOTOR_ENCODER_PIN, ticks_per_rev=90)
+    right_encoder = Encoder(pin_num=RIGHT_MOTOR_ENCODER_PIN, ticks_per_rev=90)
+    
+    # --- Create Motors ---
+    # NOTE: Depending on your physical wiring, you may need to set invert=True on one side
+    # so that both wheels spin 'forward' with the same sign of target RPM.
+    left_motor = Motor(
+        speed_pin=LEFT_MOTOR_SPEED_PIN,
+        direction_pin=LEFT_MOTOR_DIRECTION_PIN,
+        brake_pin=LEFT_MOTOR_BRAKE_PIN,
+        encoder=left_encoder,
+        invert=True
+    )
+    right_motor = Motor(
+        speed_pin=RIGHT_MOTOR_SPEED_PIN,
+        direction_pin=RIGHT_MOTOR_DIRECTION_PIN,
+        brake_pin=RIGHT_MOTOR_BRAKE_PIN,
+        encoder=right_encoder,
+        invert=False  # Often the right motor needs to be inverted, adjust as needed
     )
 
-asyncio.run(main())
+    # --- Create Differential Drive Controller ---
+    diff_drive = DiffDriveController(left_motor, right_motor)
+
+    def run_for_seconds(linear_m_s, angular_rad_s, duration_s=3):
+        """
+        Helper function to run a certain (linear, angular) command for `duration_s` seconds.
+        """
+        diff_drive.update_cmd_vel(linear=linear_m_s, angular=angular_rad_s)
+        t_start = time.ticks_ms()
+        while time.ticks_diff(time.ticks_ms(), t_start) < (duration_s * 1000):
+            # Convert desired (linear, angular) to left/right wheel RPM
+            rpm_left, rpm_right = diff_drive.compute_wheel_rpms()
+
+            # Update each motor with the computed RPM setpoint
+            left_motor.set_target_rpm(rpm_left)
+            right_motor.set_target_rpm(rpm_right)
+
+            # Run motor control loop
+            left_motor.update()
+            right_motor.update()
+
+            time.sleep(0.01)  # 10 ms loop time (adjust as needed)
+
+    try:
+        # Test sequence: forward, stop, backward, stop, rotate in place
+
+        print("Moving forward...")
+        run_for_seconds(linear_m_s=0.2, angular_rad_s=0.0, duration_s=3)
+
+        print("Stopping...")
+        run_for_seconds(linear_m_s=0.0, angular_rad_s=0.0, duration_s=1)
+
+        print("Moving backward...")
+        run_for_seconds(linear_m_s=-0.2, angular_rad_s=0.0, duration_s=3)
+
+        print("Stopping...")
+        run_for_seconds(linear_m_s=0.0, angular_rad_s=0.0, duration_s=1)
+
+        print("Rotating in place (counterclockwise)...")
+        run_for_seconds(linear_m_s=0.0, angular_rad_s=1.0, duration_s=3)
+
+        print("Stopping...")
+        run_for_seconds(linear_m_s=0.0, angular_rad_s=0.0, duration_s=1)
+
+        print("Done with test sequence.")
+
+    except KeyboardInterrupt:
+        print("Interrupted by user, stopping.")
+        diff_drive.update_cmd_vel(0.0, 0.0)
+        # Optionally brake motors:
+        left_motor.brake()
+        right_motor.brake()
+
+if __name__ == "__main__":
+    main()

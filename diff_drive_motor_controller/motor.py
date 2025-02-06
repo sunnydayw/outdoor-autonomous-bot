@@ -53,7 +53,13 @@ class Motor:
         self.last_error = 0
         self.last_output = 0
         self.last_time = time.ticks_ms()
+        self._update_loop_time = 0 
 
+    @property
+    def update_loop_time(self):
+        """Return the execution time of the last update loop in milliseconds."""
+        return self._update_loop_time
+    
     def set_target_rpm(self, rpm: int):
         """
         Set the desired RPM for this motor.
@@ -84,6 +90,7 @@ class Motor:
         Call this regularly (e.g. in a loop) to update motor PWM based on 
         the current encoder reading and the target RPM using PID + feed-forward.
         """
+        start_time = time.ticks_us()
         current_rpm = self.encoder.update_rpm()
         current_time = time.ticks_ms()
         dt_ms = time.ticks_diff(current_time, self.last_time)
@@ -131,3 +138,5 @@ class Motor:
         self.last_error = error
         self.last_output = output
         self.last_time = current_time
+
+        self._update_loop_time = time.ticks_diff(time.ticks_ms(), start_time)

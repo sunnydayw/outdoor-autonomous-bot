@@ -32,6 +32,7 @@ class DiffDriveController:
         # Tracking for debugging and PID tuning
         self.last_target_rpm = (0, 0)
         self.last_actual_rpm = (0, 0)
+        self.last_status_update = time.ticks_ms()
 
     def update_cmd_vel(self, linear, angular):
         """
@@ -73,6 +74,8 @@ class DiffDriveController:
         if time.ticks_diff(current_time, self.last_cmd_time) > self.cmd_vel_timeout:
             self.left_motor.set_target_rpm(0)
             self.right_motor.set_target_rpm(0)
+            self.left_motor.brake()
+            self.right_motor.brake()
             return
 
         # Compute new wheel RPMs
@@ -81,9 +84,11 @@ class DiffDriveController:
         # Send commands to motors
         self.left_motor.set_target_rpm(rpm_left)
         self.right_motor.set_target_rpm(rpm_right)
+        self.left_motor.update()
+        self.right_motor.update()
 
         # Store last actual RPMs for monitoring
-        self.last_actual_rpm = (self.left_motor.read_rpm(), self.right_motor.read_rpm())
+        self.last_actual_rpm = (self.left_motor.encoder.read_rpm(), self.right_motor.encoder.read_rpm())
 
     def get_status(self, print_status=False, STATUS_UPDATE_INTERVAL=500):
         """
