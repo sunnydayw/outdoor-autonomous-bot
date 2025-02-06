@@ -27,6 +27,11 @@ class Encoder:
         self.last_count = 0
         self.rpm = 0  # Store latest RPM
 
+    @property
+    def read_ticks(self):
+        """Return the current encoder tick count atomically."""
+        return self.encoder_count
+    
     def _callback(self, pin):
         """Interrupt callback to count encoder ticks."""
         self.encoder_count += 1
@@ -38,15 +43,6 @@ class Encoder:
         self.last_count = 0
         self.rpm = 0 
 
-    def read_ticks(self):
-        """Return the current encoder tick count atomically."""
-        return self.encoder_count
-
-    
-    def read_rpm(self):
-        """Return the last calculated RPM."""
-        return self.rpm
-
     def update_rpm(self):
         """
         Calculate and return the RPM based on the tick difference and elapsed time.
@@ -57,7 +53,7 @@ class Encoder:
         current_time = time.ticks_ms()
         dt_ms = time.ticks_diff(current_time, self.last_time)
 
-        if dt_ms <= 0:
+        if dt_ms <= 5:
             return self.rpm  # Avoid division by zero
         
         dt_sec = dt_ms / 1000.0
@@ -67,6 +63,7 @@ class Encoder:
         self.last_count = self.encoder_count
         self.last_time = current_time
         
+        # Ensure RPM is output as integer
         self.rpm = int((ticks * 60.0) / (self.ticks_per_rev * dt_sec))
 
         return self.rpm
