@@ -165,7 +165,7 @@ class Motor:
         self.last_output = output
         self.last_time = current_time
 
-        self._update_loop_time = time.ticks_diff(time.ticks_ms(), start_time)
+        self._update_loop_time = time.ticks_diff(time.ticks_us(), start_time)
 
     def get_diagnostics(self):
         """
@@ -178,5 +178,6 @@ class Motor:
             "p_term": self.p_term,
             "i_term": self.i_term,
             "d_term": self.d_term,
-            "output": self.last_output
+            "output": self.last_output,
+            "loop_time": self._update_loop_time
         }
