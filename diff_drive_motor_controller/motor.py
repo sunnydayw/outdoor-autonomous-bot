@@ -56,6 +56,12 @@ class Motor:
         self._update_loop_time = 0 
         self._current_rpm = 0  # Cached RPM value
 
+        # PID term storage for diagnostics.
+        self.p_term = 0
+        self.i_term = 0
+        self.d_term = 0
+        # last output 
+
     @property
     def update_loop_time(self):
         """Return the execution time of the last update loop in milliseconds."""
@@ -122,9 +128,16 @@ class Motor:
             self.integral += error * dt_sec
         self.integral = max(min(self.integral, 500), -500)  # Clamp integral
 
-        # --- Compute PID Output ---
+        # --- Derivative Calculation ---
         derivative = (error - self.last_error) / dt_sec
-        pid_output = (self.Kp * error) + (self.Ki * self.integral) + (self.Kd * derivative)
+        
+        # --- Compute Individual PID Terms for Diagnostics ---
+        self.p_term = self.Kp * error
+        self.i_term = self.Ki * self.integral
+        self.d_term = self.Kd * derivative
+
+        # --- Compute PID Output ---
+        pid_output = self.p_term + self.i_term + self.d_term
 
         # --- Feed-Forward Term ---
         #   feed_forward = Kff * (desired_rpm) + offset
@@ -153,3 +166,17 @@ class Motor:
         self.last_time = current_time
 
         self._update_loop_time = time.ticks_diff(time.ticks_ms(), start_time)
+
+    def get_diagnostics(self):
+        """
+        Return a dictionary of motor diagnostics data for monitoring.
+        Includes target RPM, current RPM, and each PID term.
+        """
+        return {
+            "target_rpm": self.target_rpm,
+            "current_rpm": self._current_rpm,
+            "p_term": self.p_term,
+            "i_term": self.i_term,
+            "d_term": self.d_term,
+            "output": self.last_output
+        }
