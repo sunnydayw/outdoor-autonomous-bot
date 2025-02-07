@@ -32,7 +32,12 @@ class DiffDriveController:
         self._last_target_rpm = (0, 0)
         self._last_actual_rpm = (0, 0)
         self._last_status_update = time.ticks_ms()
-        
+
+        # Timeout flag for monitoring.
+        self._timeout_flag = False
+        # Loop time for update_motors (in us).
+        self._last_loop_time = 0
+
     def update_cmd_vel(self, linear, angular):
         """
         Update desired velocities from a cmd_vel command.
@@ -74,13 +79,18 @@ class DiffDriveController:
         Compute and set motor speeds based on cmd_vel.
         Includes motor synchronization and timeout handling.
         """
+        start_loop = time.ticks_us()
         current_time = time.ticks_ms()
         
         # Check for command timeout
         if time.ticks_diff(current_time, self._last_cmd_time) > self.cmd_vel_timeout:
+            self._timeout_flag = True
             self.stop_motors()
             return
-            
+    
+        # If a valid command is present, clear any previous timeout flag.
+        self._timeout_flag = False
+
         # Compute target RPMs
         rpm_left, rpm_right = self.compute_wheel_rpms()
         
@@ -95,14 +105,12 @@ class DiffDriveController:
         # Store actual RPMs for monitoring
         self._last_actual_rpm = (self.left_motor.current_rpm, self.right_motor.current_rpm)
 
-    @property
-    def motor_status(self):
+        # Calculate loop time.
+        self._last_loop_time = time.ticks_diff(time.ticks_us(), start_loop)
+
+    def get_diagnostics(self):
         """Return current motor status for monitoring."""
         return {
-            'target_rpm': self._last_target_rpm,
-            'actual_rpm': self._last_actual_rpm,
-            'rpm_error': (
-                self._last_target_rpm[0] - self._last_actual_rpm[0],
-                self._last_target_rpm[1] - self._last_actual_rpm[1]
-            )
+            'timeout': self._timeout_flag,
+            'loop_time': self._last_loop_time
         }
