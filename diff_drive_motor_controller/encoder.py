@@ -1,8 +1,9 @@
 from machine import Pin
 import time
+from collections import deque
 
 class Encoder:
-    def __init__(self, pin_num, pull=Pin.PULL_UP, ticks_per_rev=90):
+    def __init__(self, pin_num, pull=Pin.PULL_UP, ticks_per_rev=90, window_ms=500):
         """
         Initialize the encoder.
         :param pin_num: GPIO pin number for the encoder signal.
@@ -16,7 +17,12 @@ class Encoder:
         # Configuration
         self._ticks_per_rev = ticks_per_rev
         
-        # Variables for RPM calculation
+        # Sliding window settings (time in ms)
+        self._window_ms = window_ms
+        # Use a list to store samples: each sample is (timestamp, tick_delta, dt_ms)
+        self._samples = []
+
+        # Timing variables
         self._last_time = time.ticks_ms()
         self._last_count = 0
         self._rpm = 0
@@ -76,15 +82,27 @@ class Encoder:
         self._max_dt = max(self._max_dt, dt_ms)
         self._last_update_time = current_time
         
-        # Calculate RPM
-        dt_sec = dt_ms / 1000.0
+        # Calculate ticks count
         ticks = self._encoder_count - self._last_count
-        
+
+        # Append new sample: (timestamp, tick_delta, dt_ms)
+        self._samples.append((current_time, ticks, dt_ms))
+
         # Update tracking variables
         self._last_count = self._encoder_count
         self._last_time = current_time
         
-        # Calculate new RPM
-        self._rpm = int((ticks * 60.0) / (self._ticks_per_rev * dt_sec))
+        # Remove samples that are older than the sliding window (1 second)
+        while self._samples and time.ticks_diff(current_time, self._samples[0][0]) > self._window_ms:
+            self._samples.pop(0)
+        
+        # Sum ticks and elapsed time over the current window
+        total_ticks = sum(sample[1] for sample in self._samples)
+        total_time_ms = sum(sample[2] for sample in self._samples)
+
+        # Avoid division by zero and compute rpm
+        if total_time_ms > 0:
+            dt_sec = total_time_ms / 1000.0
+            self._rpm = int((total_ticks * 60.0) / (self._ticks_per_rev * dt_sec))
         
         return self._rpm
