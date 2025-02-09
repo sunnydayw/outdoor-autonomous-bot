@@ -27,11 +27,6 @@ class Encoder:
         self._last_count = 0
         self._rpm = 0.0
         
-        # Performance monitoring
-        self._min_dt = float('inf')  # Track minimum time between updates
-        self._max_dt = 0             # Track maximum time between updates
-        self._last_update_time = 0   # Track when RPM was last computed
-        
     @property
     def ticks(self):
         """Return the current encoder tick count atomically."""
@@ -41,15 +36,6 @@ class Encoder:
     def rpm(self):
         """Return the last calculated RPM value."""
         return round(abs(self._rpm), 2)
-    
-    @property
-    def update_stats(self):
-        """Return timing statistics for debugging."""
-        return {
-            'min_dt_ms': self._min_dt,
-            'max_dt_ms': self._max_dt,
-            'time_since_update_ms': time.ticks_diff(time.ticks_ms(), self._last_update_time)
-        }
 
     def _callback(self, pin):
         """Interrupt callback to count encoder ticks."""
@@ -61,9 +47,6 @@ class Encoder:
         self._last_time = time.ticks_ms()
         self._last_count = 0
         self._rpm = 0.0
-        self._min_dt = float('inf')
-        self._max_dt = 0
-        self._last_update_time = 0
 
     def update_rpm(self):
         """
