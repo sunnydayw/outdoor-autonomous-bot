@@ -38,7 +38,7 @@ class DiffDriveController:
         # Loop time for update_motors (in us).
         self._last_loop_time = 0
 
-    def update_cmd_vel(self, linear, angular):
+    def update_cmd_vel(self, linear: float, angular: float):
         """
         Update desired velocities from a cmd_vel command.
         :param linear: Linear velocity (m/s).
@@ -61,11 +61,11 @@ class DiffDriveController:
         v_left = self._linear - (self._angular * WHEEL_SEPARATION / 2)
         v_right = self._linear + (self._angular * WHEEL_SEPARATION / 2)
         
-        rpm_left = int((v_left * 60) / WHEEL_CIRCUMFERENCE)
-        rpm_right = int((v_right * 60) / WHEEL_CIRCUMFERENCE)
+        rpm_left = (v_left * 60) / WHEEL_CIRCUMFERENCE
+        rpm_right = (v_right * 60) / WHEEL_CIRCUMFERENCE
         
         self._last_target_rpm = (rpm_left, rpm_right)
-        return rpm_left, rpm_right
+        return round(rpm_left, 2), round(rpm_right, 2)
     
     def stop_motors(self):
         """Safely stop both motors."""
