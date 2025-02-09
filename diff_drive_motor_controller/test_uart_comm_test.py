@@ -8,10 +8,11 @@ from encoder import Encoder
 from motor import Motor
 from diff_drive_controller import DiffDriveController
 from communication import *
+import gc
 
 # --- Create Encoders ---
-left_encoder = Encoder(pin_num=LEFT_MOTOR_ENCODER_PIN, ticks_per_rev=90,window_ms=500)
-right_encoder = Encoder(pin_num=RIGHT_MOTOR_ENCODER_PIN, ticks_per_rev=90, window_ms=500)
+left_encoder = Encoder(pin_num=LEFT_MOTOR_ENCODER_PIN, ticks_per_rev=90,window_ms=1000)
+right_encoder = Encoder(pin_num=RIGHT_MOTOR_ENCODER_PIN, ticks_per_rev=90, window_ms=1000)
     
 # --- Create Motors ---
 # NOTE: Depending on your physical wiring, you may need to set invert=True on one side
@@ -44,14 +45,19 @@ def drive_run_for_seconds(controller: DiffDriveController, linear: float, angula
         controller.update_motors()
         telemetry.send_message()
         telemetry.receive_control_message()
+        gc.collect()  # Force garbage collection at a controlled time.
         time.sleep_ms(50)  # 10 ms loop time (adjust as needed)
     print("end test")
-    controller.stop_motors()
+
 
 def main():
     try:
         #run_for_seconds(motor=right_motor, rpm=50,duration_s=10)
-        drive_run_for_seconds(controller=controller, linear=2.0, angular=0, duration_s=60)
+        drive_run_for_seconds(controller=controller, linear=3.0, angular=0, duration_s=10)
+        drive_run_for_seconds(controller=controller, linear=2.0, angular=0, duration_s=20)
+        drive_run_for_seconds(controller=controller, linear=1.5, angular=0, duration_s=30)
+        controller.stop_motors()
+
     except KeyboardInterrupt:
         print("Interrupted by user, stopping.")
         # Optionally brake motors:

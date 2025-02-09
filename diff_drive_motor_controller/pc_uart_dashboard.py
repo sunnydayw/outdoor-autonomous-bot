@@ -16,16 +16,16 @@ pg.setConfigOption('foreground', 'k')
 
 # ----------------------
 # TelemetryReader Thread
-# Message structure (40 bytes):
+# Message structure (64 bytes):
 #   uint16: Start Delimiter (0xAA55)
-#   uint8:  Message Length (40)
+#   uint8:  Message Length (64)
 #   uint16: Message Counter
 #   uint32: Timestamp (ms)
 #   uint8:  Timeout Flag
-#   7 x int16: Left Motor diagnostics (target_rpm, actual_rpm, p, i, d, term, loop_time)
-#   7 x int16: Right Motor diagnostics (same order)
+#   5 x float + 3 x int16: Left motor diagnostics (26 bytes)
+#   5 x float + 3 x int16: Right motor diagnostics (26 bytes)
 #   uint16: Checksum
-FMT_NO_CHECKSUM = '<HBHIB' + '5f2h' + '5f2h'
+FMT_NO_CHECKSUM = '<HBHIB' + '5f3h' + '5f3h'
 FMT_FULL = FMT_NO_CHECKSUM + 'H'
 MSG_SIZE = struct.calcsize(FMT_FULL)
 START_DELIMITER = 0xAA55
@@ -46,15 +46,15 @@ class TelemetryReader(Thread):
             'left_p': deque(maxlen=1500),
             'left_i': deque(maxlen=1500),
             'left_d': deque(maxlen=1500),
-            'left_term': deque(maxlen=1500),
             'left_pwm': deque(maxlen=1500),
             'right_p': deque(maxlen=1500),
             'right_i': deque(maxlen=1500),
             'right_d': deque(maxlen=1500),
-            'right_term': deque(maxlen=1500),
             'right_pwm': deque(maxlen=1500),
             'left_loop_time': deque(maxlen=1500),
             'right_loop_time': deque(maxlen=1500),
+            'left_encoder_loop_time': deque(maxlen=1500),
+            'right_encoder_loop_time': deque(maxlen=1500),
             'timeout_flag': deque(maxlen=1500),
             'msg_counter': deque(maxlen=1500),
         }
@@ -82,17 +82,19 @@ class TelemetryReader(Thread):
             timestamp = unpacked[3]  # in ms from the controller
             timeout_flag = unpacked[4]
 
-            # Left motor: first 5 floats (indices 5 to 9) and then 2 shorts (indices 10-11)
-            left_floats = unpacked[5:10]   # target_rpm, actual_rpm, p_term, i_term, d_term
-            left_ints = unpacked[10:12]    # output, loop_time
+            # Left motor diagnostics:
+            # left_floats: indices 5 to 9 (5 floats)
+            left_floats = unpacked[5:10]
+            # left_ints: indices 10 to 12 (3 int16: output, motor_loop_time, encoder_loop_time)
+            left_ints = unpacked[10:13]
 
-            # Right motor: next 5 floats (indices 12 to 16) and then 2 shorts (indices 17-18)
-            right_floats = unpacked[12:17]
-            right_ints = unpacked[17:19]
+            # Right motor diagnostics:
+            right_floats = unpacked[13:18]
+            right_ints = unpacked[18:21]
 
             # Check checksum (simple additive over all bytes except final 2 bytes)
             calc_checksum = sum(data[:-2]) & 0xFFFF
-            recv_checksum = unpacked[19]
+            recv_checksum = unpacked[21]
             if calc_checksum != recv_checksum:
                 print("Checksum error: calc", calc_checksum, "recv", recv_checksum)
                 continue
@@ -109,18 +111,18 @@ class TelemetryReader(Thread):
             self.data_buffers['left_p'].append(left_floats[2])
             self.data_buffers['left_i'].append(left_floats[3])
             self.data_buffers['left_d'].append(left_floats[4])
-            self.data_buffers['left_term'].append(int(left_ints[0]))
             self.data_buffers['left_pwm'].append(int(left_ints[0]))
             self.data_buffers['left_loop_time'].append(int(left_ints[1]))
-            
+            self.data_buffers['left_encoder_loop_time'].append(int(left_ints[2]))
+
             self.data_buffers['right_target_rpm'].append(right_floats[0])
             self.data_buffers['right_actual_rpm'].append(right_floats[1])
             self.data_buffers['right_p'].append(right_floats[2])
             self.data_buffers['right_i'].append(right_floats[3])
             self.data_buffers['right_d'].append(right_floats[4])
-            self.data_buffers['right_term'].append(int(right_ints[0]))
             self.data_buffers['right_pwm'].append(int(right_ints[0]))
             self.data_buffers['right_loop_time'].append(int(right_ints[1]))
+            self.data_buffers['right_encoder_loop_time'].append(int(right_ints[2]))
 
             self.data_buffers['timeout_flag'].append(timeout_flag)
             self.data_buffers['msg_counter'].append(msg_counter)
@@ -226,7 +228,6 @@ class Dashboard(QtWidgets.QMainWindow):
         display_layout = QtWidgets.QVBoxLayout(display_group)
         self.clear_data_button = QtWidgets.QPushButton("Clear Data")
         self.reset_scale_button = QtWidgets.QPushButton("Reset Scale (Current Window)")
-        # Slider for x-axis window length (in seconds)
         self.x_window_slider = QtWidgets.QSlider(Qt.Horizontal)
         self.x_window_slider.setRange(5, 60)
         self.x_window_slider.setValue(self.x_window_length)
@@ -238,7 +239,7 @@ class Dashboard(QtWidgets.QMainWindow):
         display_layout.addWidget(self.reset_scale_button)
         right_col_layout.addWidget(display_group)
         
-        # Stats group: Loop Times & Timeout and Message Counter Differences.
+        # Stats group: Loop Times & Timeout, Encoder Loop Times, and Message Counter Differences.
         stats_group = QtWidgets.QGroupBox("Loop & Message Stats")
         stats_layout = QtWidgets.QVBoxLayout(stats_group)
         
@@ -249,6 +250,14 @@ class Dashboard(QtWidgets.QMainWindow):
         self.right_loop_curve = self.loop_plot.plot(pen=pg.mkPen(color=(0, 150, 150), width=2), name="Right Loop")
         self.timeout_curve = self.loop_plot.plot(pen=pg.mkPen(color=(0, 0, 0), width=2, style=Qt.DashLine), name="Timeout (scaled)")
         stats_layout.addWidget(self.loop_plot)
+        
+        # New plot: Encoder Loop Times for Left and Right motors.
+        self.encoder_plot = pg.PlotWidget(title="Encoder Loop Times")
+        self.encoder_plot.showGrid(x=True, y=True)
+        self.encoder_plot.addLegend()
+        self.left_encoder_curve = self.encoder_plot.plot(pen=pg.mkPen(color=(255, 0, 255), width=2), name="Left Encoder")
+        self.right_encoder_curve = self.encoder_plot.plot(pen=pg.mkPen(color=(0, 255, 255), width=2), name="Right Encoder")
+        stats_layout.addWidget(self.encoder_plot)
         
         self.msg_diff_plot = pg.PlotWidget(title="Msg Counter Diff")
         self.msg_diff_plot.showGrid(x=True, y=True)
@@ -299,12 +308,12 @@ class Dashboard(QtWidgets.QMainWindow):
         main_layout.addWidget(right_group)
         main_layout.addLayout(right_col_layout)
         
-        # Timer for updating plots; update interval set by default 100 ms.
+        # Timer for updating plots; default update interval 100 ms.
         self.update_timer = QtCore.QTimer()
         self.update_timer.timeout.connect(self.update_plots)
         self.update_timer.start(100)
         
-        # Connect control signals.
+        # Connect signals.
         self.clear_data_button.clicked.connect(self.telemetry.clear_data)
         self.reset_scale_button.clicked.connect(self.reset_current_window_scales)
         self.x_window_slider.valueChanged.connect(self.update_x_window)
@@ -319,9 +328,9 @@ class Dashboard(QtWidgets.QMainWindow):
     
     def reset_current_window_scales(self):
         """
-        Reset each plot's y-axis based on the data within the currently visible x-axis window.
-        The x-axis window is defined as [current_time - x_window_length, current_time],
-        where current_time is the most recent timestamp.
+        Reset each plot's y-axis based on data within the current x-axis window.
+        The window is defined as [current_time - x_window_length, current_time],
+        where current_time is the latest timestamp.
         """
         buffers = {k: list(v) for k, v in self.telemetry.data_buffers.items()}
         t = buffers.get('time', [])
@@ -330,7 +339,6 @@ class Dashboard(QtWidgets.QMainWindow):
         current_time = t[-1]
         x_min = max(0, current_time - self.x_window_length)
         x_max = current_time
-        # For each plot, filter the data points where t is within [x_min, x_max] and compute new y-range.
         plots_data = [
             (self.left_rpm_plot, 'left_target_rpm'),
             (self.left_rpm_plot, 'left_actual_rpm'),
@@ -345,7 +353,9 @@ class Dashboard(QtWidgets.QMainWindow):
             (self.right_d_plot, 'right_d'),
             (self.right_pwm_plot, 'right_pwm'),
             (self.loop_plot, 'left_loop_time'),
-            (self.loop_plot, 'right_loop_time')
+            (self.loop_plot, 'right_loop_time'),
+            (self.encoder_plot, 'left_encoder_loop_time'),
+            (self.encoder_plot, 'right_encoder_loop_time')
         ]
         for plot, key in plots_data:
             y_vals = [y for (t_val, y) in zip(t, buffers.get(key, [])) if x_min <= t_val <= x_max]
@@ -383,6 +393,10 @@ class Dashboard(QtWidgets.QMainWindow):
             scaled_timeout = [flag * 1000 for flag in buffers['timeout_flag']]
             self.safe_set_data(self.timeout_curve, t, scaled_timeout)
         
+        # Encoder Loop Times.
+        self.safe_set_data(self.left_encoder_curve, t, buffers['left_encoder_loop_time'])
+        self.safe_set_data(self.right_encoder_curve, t, buffers['right_encoder_loop_time'])
+        
         # Message Counter Differences.
         msg_list = buffers.get('msg_counter', [])
         if len(msg_list) >= 2:
@@ -393,14 +407,13 @@ class Dashboard(QtWidgets.QMainWindow):
             t_diff = t[1:]
             self.safe_set_data(self.msg_diff_curve, t_diff, msg_diff)
         
-        # Set x-axis range for all plots based on the slider's window length.
+        # Update x-axis range for all plots.
         current_time = t[-1]
         x_min = max(0, current_time - self.x_window_length)
         for plot in [self.left_rpm_plot, self.left_p_plot, self.left_i_plot, self.left_d_plot, self.left_pwm_plot,
                      self.right_rpm_plot, self.right_p_plot, self.right_i_plot, self.right_d_plot, self.right_pwm_plot,
-                     self.loop_plot, self.msg_diff_plot]:
+                     self.loop_plot, self.encoder_plot, self.msg_diff_plot]:
             plot.setXRange(x_min, current_time)
-    
     def send_control_command(self):
         """
         Pack and send a control message to the Pico.

@@ -11,7 +11,7 @@ class RobotTelemetry:
         self.controller = controller
         self.msg_counter = 0
         self.start_delimiter = 0xAA55
-        self.msg_length = 60  # Updated telemetry message length
+        self.msg_length = 64  # Updated total message length in bytes
 
     def compute_checksum(self, data):
         """Simple additive checksum: sum all bytes modulo 0x10000."""
@@ -22,14 +22,14 @@ class RobotTelemetry:
         Assemble and send the telemetry message over UART.
         Message Format:
           uint16: Start Delimiter
-          uint8:  Message Length (60)
+          uint8:  Message Length (64)
           uint16: Message Counter
           uint32: Timestamp (ms)
           uint8:  Timeout Flag
           5 x float: Left motor diagnostics (target_rpm, current_rpm, p_term, i_term, d_term)
-          2 x int16: Left motor (output, loop_time)
+          3 x int16: Left motor diagnostics (output, motor_loop_time, encoder_loop_time)
           5 x float: Right motor diagnostics (target_rpm, current_rpm, p_term, i_term, d_term)
-          2 x int16: Right motor (output, loop_time)
+          3 x int16: Right motor diagnostics (output, motor_loop_time, encoder_loop_time)
           uint16: Checksum
         """
         timestamp = time.ticks_ms()
@@ -50,7 +50,9 @@ class RobotTelemetry:
             float(left_diag["i_term"]),
             float(left_diag["d_term"]),
             int(left_diag["output"]),
-            int(left_diag["loop_time"])
+            int(left_diag["motor_loop_time"]),
+            int(left_diag["encoder_loop_time"])
+
         )
         right_vals = (
             float(right_diag["target_rpm"]),
@@ -59,14 +61,15 @@ class RobotTelemetry:
             float(right_diag["i_term"]),
             float(right_diag["d_term"]),
             int(right_diag["output"]),
-            int(right_diag["loop_time"])
+            int(right_diag["motor_loop_time"]),
+            int(right_diag["encoder_loop_time"])
         )
 
         # Build the format string:
         # '<' for little-endian
         # H: start delimiter; B: message length; H: message counter; I: timestamp; B: timeout flag;
         # 5f2h: left motor diagnostics; 5f2h: right motor diagnostics.
-        fmt_without_checksum = '<HBHIB' + '5f2h' + '5f2h'
+        fmt_without_checksum = '<HBHIB' + '5f3h' + '5f3h'
         packed = struct.pack(fmt_without_checksum,
                              self.start_delimiter,
                              self.msg_length,
