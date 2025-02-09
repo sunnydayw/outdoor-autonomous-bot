@@ -40,11 +40,11 @@ def drive_run_for_seconds(controller: DiffDriveController, linear: float, angula
         controller.update_cmd_vel(linear,angular)
         controller.compute_wheel_rpms()
         controller.update_motors()
-        print(controller.motor_status)  # This will print the actual milliseconds value
+        print(controller.get_diagnostics)  # This will print the actual milliseconds value
         
         time.sleep_ms(12)  # 10 ms loop time (adjust as needed)
     print("end test")
-    motor.brake()
+    controller.stop_motors()
 
 def run_for_seconds(motor: Motor, rpm: int, duration_s=3):
     t_start = time.ticks_ms()
