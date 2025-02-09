@@ -28,7 +28,6 @@ class Encoder:
         self._rpm = 0.0
 
         self._update_loop_time = 0 
-
         
     @property
     def ticks(self):
@@ -56,6 +55,8 @@ class Encoder:
         Calculate and return the RPM based on the tick difference and elapsed time.
         Returns the last known RPM if called too frequently.
         """
+        start_time = time.ticks_us()
+
         current_time = time.ticks_ms()
         dt_ms = time.ticks_diff(current_time, self._last_time)
         
@@ -86,4 +87,8 @@ class Encoder:
             dt_sec = total_time_ms / 1000.0
             self._rpm = (total_ticks * 60.0) / (self._ticks_per_rev * dt_sec)
         
+        self._update_loop_time = time.ticks_diff(time.ticks_us(), start_time)
         return round(abs(self._rpm), 2)
+    
+    def get_diagnostics(self):
+        return self._update_loop_time
