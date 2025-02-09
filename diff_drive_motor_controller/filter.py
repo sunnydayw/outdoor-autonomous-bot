@@ -1,6 +1,6 @@
 class MovingAverageFilter:
     # A simple approach is to average the last N measurements. It’s easy to implement and effective for reducing random noise, though it introduces a delay.
-    def __init__(self, window_size=5):
+    def __init__(self, window_size=15):
         self.window_size = window_size
         self.values = []
     
