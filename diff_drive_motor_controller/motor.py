@@ -10,7 +10,6 @@ Both blocking and asynchronous (non-blocking) set_rpm functions are provided.
 import time
 from machine import Pin, PWM
 from config import PWM_FREQ, FULL_DUTY, MIN_DUTY, MAX_DUTY, PID, Kff, offset, SLEW_MAX_DELTA
-from filter import *
 
 class Motor:
     def __init__(self, direction_pin, speed_pin, brake_pin, encoder, invert=False):
@@ -52,7 +51,8 @@ class Motor:
         self.target_rpm = 0.0
         self.integral = 0.0
         self.last_error = 0.0
-        self.last_output = 0.0
+        # Instead of 0, initialize last_output to MIN_DUTY
+        self.last_output = MIN_DUTY
         self.last_time = time.ticks_ms()
         self._update_loop_time = 0 
         self._current_rpm = 0.0  # Cached RPM value
@@ -150,9 +150,6 @@ class Motor:
         self.i_term = self.Ki * self.integral
         self.d_term = self.Kd * derivative
 
-        filter = MovingAverageFilter()
-        self.d_term = filter.update(self.d_term)
-
         # --- Compute PID Output ---
         pid_output = int(self.p_term + self.i_term + self.d_term)
 
@@ -167,11 +164,12 @@ class Motor:
         delta = raw_output - self.last_output
         if delta > SLEW_MAX_DELTA:
             raw_output = self.last_output + SLEW_MAX_DELTA
-        
-        raw_output =  int(raw_output)
-        # --- Clamp to PWM Range ---
-        output = int(max(min(raw_output, MAX_DUTY), MIN_DUTY))
+        elif delta < -SLEW_MAX_DELTA:
+            raw_output = self.last_output - SLEW_MAX_DELTA
 
+        # --- Final Clamp to PWM Range ---
+        output = int(max(min(raw_output, MAX_DUTY), MIN_DUTY))
+        
         # --- Set PWM ---
         self.speed_pwm.duty_u16(output)
 
@@ -180,6 +178,7 @@ class Motor:
         self.last_output = output
         self.last_time = current_time
         self._update_loop_time = time.ticks_diff(time.ticks_us(), start_time)
+
 
     def get_diagnostics(self):
         """
@@ -195,3 +194,4 @@ class Motor:
             "output": int(self.last_output),
             "loop_time": self._update_loop_time
         }
+
