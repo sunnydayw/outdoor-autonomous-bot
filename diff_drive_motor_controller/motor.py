@@ -192,6 +192,7 @@ class Motor:
             "i_term": round(self.i_term, 2),
             "d_term": round(self.d_term, 2),
             "output": int(self.last_output),
-            "loop_time": self._update_loop_time
+            "motor_loop_time": self._update_loop_time,
+            "encoder_loop_time": self.encoder.get_diagnostics() # return loop time
         }
 
