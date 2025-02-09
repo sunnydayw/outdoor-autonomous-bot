@@ -10,6 +10,7 @@ Both blocking and asynchronous (non-blocking) set_rpm functions are provided.
 import time
 from machine import Pin, PWM
 from config import PWM_FREQ, FULL_DUTY, MIN_DUTY, MAX_DUTY, PID, Kff, offset, SLEW_MAX_DELTA
+from filter import *
 
 class Motor:
     def __init__(self, direction_pin, speed_pin, brake_pin, encoder, invert=False):
@@ -149,6 +150,9 @@ class Motor:
         self.i_term = self.Ki * self.integral
         self.d_term = self.Kd * derivative
 
+        filter = MovingAverageFilter()
+        self.d_term = filter.update(self.d_term)
+
         # --- Compute PID Output ---
         pid_output = int(self.p_term + self.i_term + self.d_term)
 
@@ -163,14 +167,13 @@ class Motor:
         delta = raw_output - self.last_output
         if delta > SLEW_MAX_DELTA:
             raw_output = self.last_output + SLEW_MAX_DELTA
-        elif delta < -SLEW_MAX_DELTA:
-            raw_output = self.last_output - SLEW_MAX_DELTA
-
+        
+        raw_output =  int(raw_output)
         # --- Clamp to PWM Range ---
         output = int(max(min(raw_output, MAX_DUTY), MIN_DUTY))
 
         # --- Set PWM ---
-        self.speed_pwm.duty_u16(int(output))
+        self.speed_pwm.duty_u16(output)
 
         # Update variables
         self.last_error = error
