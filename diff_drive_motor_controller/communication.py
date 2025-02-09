@@ -84,6 +84,50 @@ class RobotTelemetry:
         # Send the binary message over UART.
         self.uart.write(message)
 
+    def receive_control_message(self):
+        """
+        Check the UART for an incoming control message, parse it, and print its contents.
+        Control Message Format (23 bytes total):
+        uint16: Start Delimiter (0xCC33)
+        uint8:  Message Length (23)
+        uint16: Message Counter
+        int16: Left Target RPM
+        int16: Right Target RPM
+        int16: Left P, Left I, Left D
+        int16: Right P, Right I, Right D
+        uint16: Checksum
+        """
+        fmt = '<HBH8h'
+        ctrl_msg_size = struct.calcsize(fmt) + 2  # 2 bytes for checksum.
+        if self.uart.any():
+            data = self.uart.read(ctrl_msg_size)
+            if data and len(data) == ctrl_msg_size:
+                try:
+                    unpacked = struct.unpack(fmt + 'H', data)
+                except Exception as e:
+                    print("Control message unpack error:", e)
+                    return
+                if unpacked[0] != 0xCC33:
+                    print("Invalid control message delimiter:", hex(unpacked[0]))
+                    return
+                calc_checksum = sum(data[:-2]) & 0xFFFF
+                if calc_checksum != unpacked[-1]:
+                    print("Control message checksum error: calc", calc_checksum, "recv", unpacked[-1])
+                    return
+                print("Received Control Message:")
+                print("Message Counter:", unpacked[2])
+                print("Left Target RPM:", unpacked[3])
+                print("Right Target RPM:", unpacked[4])
+                print("Left P:", unpacked[5])
+                print("Left I:", unpacked[6])
+                print("Left D:", unpacked[7])
+                print("Right P:", unpacked[8])
+                print("Right I:", unpacked[9])
+                print("Right D:", unpacked[10])
+            else:
+                print("Incomplete control message")
+
+
 '''
 Below is one approach to designing an efficient binary message format for communicating from a Pico (running MicroPython) to a PC over UART. 
 
