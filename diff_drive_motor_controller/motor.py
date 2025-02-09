@@ -10,7 +10,6 @@ Both blocking and asynchronous (non-blocking) set_rpm functions are provided.
 import time
 from machine import Pin, PWM
 from config import PWM_FREQ, FULL_DUTY, MAX_DUTY, PID, Kff, offset, SLEW_MAX_DELTA
-from typing import Optional
 
 class Motor:
     def __init__(self, direction_pin, speed_pin, brake_pin, encoder, invert=False):
@@ -96,7 +95,7 @@ class Motor:
         # Store the target RPM as a positive float rounded to 2 decimal places.
         self.target_rpm = round(abs(rpm), 2)
 
-    def update_pid(self, kp: Optional[float] = None, ki: Optional[float] = None, kd: Optional[float] = None):
+    def update_pid(self, kp=None, ki=None, kd=None):
         """
         Update the PID coefficients.
         
@@ -140,9 +139,9 @@ class Motor:
         error = self.target_rpm - self._current_rpm
 
         # --- Prevent Integral Windup ---
-        if abs(error) < 5:  # Only integrate if error is reasonable
+        if abs(error) < 40:  # Only integrate if error is reasonable
             self.integral += error * dt_sec
-        self.integral = max(min(self.integral, 100), -100)  # Clamp integral
+        # self.integral = max(min(self.integral, 100), -100)  # Clamp integral
 
         # --- Derivative Calculation ---
         derivative = (error - self.last_error) / dt_sec
