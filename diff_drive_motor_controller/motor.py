@@ -9,7 +9,7 @@ Both blocking and asynchronous (non-blocking) set_rpm functions are provided.
 
 import time
 from machine import Pin, PWM
-from config import PWM_FREQ, FULL_DUTY, MAX_DUTY, PID, Kff, offset, SLEW_MAX_DELTA
+from config import PWM_FREQ, FULL_DUTY, MIN_DUTY, MAX_DUTY, PID, Kff, offset, SLEW_MAX_DELTA
 
 class Motor:
     def __init__(self, direction_pin, speed_pin, brake_pin, encoder, invert=False):
@@ -114,7 +114,6 @@ class Motor:
         """Stop the motor using active braking for 1 second."""
         self.speed_pwm.duty_u16(0)
         self.brake_pwm.duty_u16(FULL_DUTY)
-        time.sleep(1)
         self.brake_pwm.duty_u16(0)
 
     def update(self):
@@ -139,8 +138,7 @@ class Motor:
         error = self.target_rpm - self._current_rpm
 
         # --- Prevent Integral Windup ---
-        if abs(error) < 40:  # Only integrate if error is reasonable
-            self.integral += error * dt_sec
+        self.integral += error * dt_sec
         # self.integral = max(min(self.integral, 100), -100)  # Clamp integral
 
         # --- Derivative Calculation ---
@@ -169,8 +167,7 @@ class Motor:
             raw_output = self.last_output - SLEW_MAX_DELTA
 
         # --- Clamp to PWM Range ---
-        # output = int(max(min(output, MAX_DUTY), MIN_DUTY)) # might not want to calmp the minium for now
-        output = min(raw_output, MAX_DUTY)
+        output = int(max(min(raw_output, MAX_DUTY), MIN_DUTY))
 
         # --- Set PWM ---
         self.speed_pwm.duty_u16(int(output))
