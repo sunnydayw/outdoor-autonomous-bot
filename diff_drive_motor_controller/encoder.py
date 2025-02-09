@@ -25,7 +25,7 @@ class Encoder:
         # Timing variables
         self._last_time = time.ticks_ms()
         self._last_count = 0
-        self._rpm = 0
+        self._rpm = 0.0
         
         # Performance monitoring
         self._min_dt = float('inf')  # Track minimum time between updates
@@ -40,7 +40,7 @@ class Encoder:
     @property
     def rpm(self):
         """Return the last calculated RPM value."""
-        return self._rpm
+        return round(abs(self._rpm), 2)
     
     @property
     def update_stats(self):
@@ -60,7 +60,7 @@ class Encoder:
         self._encoder_count = 0
         self._last_time = time.ticks_ms()
         self._last_count = 0
-        self._rpm = 0
+        self._rpm = 0.0
         self._min_dt = float('inf')
         self._max_dt = 0
         self._last_update_time = 0
@@ -75,7 +75,7 @@ class Encoder:
         
         # Return cached value if called too frequently
         if dt_ms < 5:
-            return self._rpm
+            return round(abs(self._rpm), 2)
             
         # Update timing statistics
         self._min_dt = min(self._min_dt, dt_ms)
@@ -103,6 +103,6 @@ class Encoder:
         # Avoid division by zero and compute rpm
         if total_time_ms > 0:
             dt_sec = total_time_ms / 1000.0
-            self._rpm = int((total_ticks * 60.0) / (self._ticks_per_rev * dt_sec))
+            self._rpm = (total_ticks * 60.0) / (self._ticks_per_rev * dt_sec)
         
-        return self._rpm
+        return round(abs(self._rpm), 2)
