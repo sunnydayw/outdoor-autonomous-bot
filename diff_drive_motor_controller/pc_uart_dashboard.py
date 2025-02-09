@@ -25,7 +25,7 @@ pg.setConfigOption('foreground', 'k')
 #   7 x int16: Left Motor diagnostics (target_rpm, actual_rpm, p, i, d, term, loop_time)
 #   7 x int16: Right Motor diagnostics (same order)
 #   uint16: Checksum
-FMT_NO_CHECKSUM = '<HBHIB7h7h'
+FMT_NO_CHECKSUM = '<HBHIB' + '5f2h' + '5f2h'
 FMT_FULL = FMT_NO_CHECKSUM + 'H'
 MSG_SIZE = struct.calcsize(FMT_FULL)
 START_DELIMITER = 0xAA55
@@ -81,8 +81,14 @@ class TelemetryReader(Thread):
             msg_counter = unpacked[2]
             timestamp = unpacked[3]  # in ms from the controller
             timeout_flag = unpacked[4]
-            left_vals = unpacked[5:12]   # (target_rpm, actual_rpm, p, i, d, term, loop_time)
-            right_vals = unpacked[12:19]
+
+            # Left motor: first 5 floats (indices 5 to 9) and then 2 shorts (indices 10-11)
+            left_floats = unpacked[5:10]   # target_rpm, actual_rpm, p_term, i_term, d_term
+            left_ints = unpacked[10:12]    # output, loop_time
+
+            # Right motor: next 5 floats (indices 12 to 16) and then 2 shorts (indices 17-18)
+            right_floats = unpacked[12:17]
+            right_ints = unpacked[17:19]
 
             # Check checksum (simple additive over all bytes except final 2 bytes)
             calc_checksum = sum(data[:-2]) & 0xFFFF
@@ -97,22 +103,25 @@ class TelemetryReader(Thread):
             t_sec = (timestamp - self.base_time) / 1000.0
 
             self.data_buffers['time'].append(t_sec)
-            self.data_buffers['left_target_rpm'].append(left_vals[0])
-            self.data_buffers['left_actual_rpm'].append(left_vals[1])
-            self.data_buffers['right_target_rpm'].append(right_vals[0])
-            self.data_buffers['right_actual_rpm'].append(right_vals[1])
-            self.data_buffers['left_p'].append(left_vals[2])
-            self.data_buffers['left_i'].append(left_vals[3])
-            self.data_buffers['left_d'].append(left_vals[4])
-            self.data_buffers['left_term'].append(left_vals[5])
-            self.data_buffers['left_pwm'].append(left_vals[5])  # Adjust if PWM is separate.
-            self.data_buffers['left_loop_time'].append(left_vals[6])
-            self.data_buffers['right_p'].append(right_vals[2])
-            self.data_buffers['right_i'].append(right_vals[3])
-            self.data_buffers['right_d'].append(right_vals[4])
-            self.data_buffers['right_term'].append(right_vals[5])
-            self.data_buffers['right_pwm'].append(right_vals[5])
-            self.data_buffers['right_loop_time'].append(right_vals[6])
+
+            self.data_buffers['left_target_rpm'].append(left_floats[0])
+            self.data_buffers['left_actual_rpm'].append(left_floats[1])
+            self.data_buffers['left_p'].append(left_floats[2])
+            self.data_buffers['left_i'].append(left_floats[3])
+            self.data_buffers['left_d'].append(left_floats[4])
+            self.data_buffers['left_term'].append(int(left_ints[0]))
+            self.data_buffers['left_pwm'].append(int(left_ints[0]))
+            self.data_buffers['left_loop_time'].append(int(left_ints[1]))
+            
+            self.data_buffers['right_target_rpm'].append(right_floats[0])
+            self.data_buffers['right_actual_rpm'].append(right_floats[1])
+            self.data_buffers['right_p'].append(right_floats[2])
+            self.data_buffers['right_i'].append(right_floats[3])
+            self.data_buffers['right_d'].append(right_floats[4])
+            self.data_buffers['right_term'].append(int(right_ints[0]))
+            self.data_buffers['right_pwm'].append(int(right_ints[0]))
+            self.data_buffers['right_loop_time'].append(int(right_ints[1]))
+
             self.data_buffers['timeout_flag'].append(timeout_flag)
             self.data_buffers['msg_counter'].append(msg_counter)
 

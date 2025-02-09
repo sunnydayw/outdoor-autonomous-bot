@@ -11,7 +11,7 @@ class RobotTelemetry:
         self.controller = controller
         self.msg_counter = 0
         self.start_delimiter = 0xAA55
-        self.msg_length = 40  # Updated message length (in bytes)
+        self.msg_length = 60  # Updated telemetry message length
 
     def compute_checksum(self, data):
         """Simple additive checksum: sum all bytes modulo 0x10000."""
@@ -20,70 +20,67 @@ class RobotTelemetry:
     def send_message(self):
         """
         Assemble and send the telemetry message over UART.
-        The message includes a start delimiter, message counter, timestamp,
-        a timeout flag (from the controller diagnostics), left and right motor diagnostics,
-        and a checksum.
+        Message Format:
+          uint16: Start Delimiter
+          uint8:  Message Length (60)
+          uint16: Message Counter
+          uint32: Timestamp (ms)
+          uint8:  Timeout Flag
+          5 x float: Left motor diagnostics (target_rpm, current_rpm, p_term, i_term, d_term)
+          2 x int16: Left motor (output, loop_time)
+          5 x float: Right motor diagnostics (target_rpm, current_rpm, p_term, i_term, d_term)
+          2 x int16: Right motor (output, loop_time)
+          uint16: Checksum
         """
-        timestamp = time.ticks_ms()  # 32-bit integer timestamp.
-        self.msg_counter = (self.msg_counter + 1) & 0xFFFF  # Wrap-around at 16-bit.
+        timestamp = time.ticks_ms()
+        self.msg_counter = (self.msg_counter + 1) & 0xFFFF
 
-        # Get diagnostics from the controller for the timeout flag.
-        controller_diagnostics = self.controller.get_diagnostics()
-        timeout_flag = 1 if controller_diagnostics.get("timeout", False) else 0
+        # Get controller diagnostics (for timeout flag)
+        ctrl_diag = self.controller.get_diagnostics()
+        timeout_flag = 1 if ctrl_diag.get("timeout", False) else 0
 
-        # Get diagnostics from both motors.
+        # Get motor diagnostics (now with float precision for RPM and PID values)
         left_diag = self.left_motor.get_diagnostics()
         right_diag = self.right_motor.get_diagnostics()
 
-        # Pack diagnostics for each motor.
-        # Order: target_rpm, current_rpm, p_term, i_term, d_term, output, loop_time.
-        left_motor_values = (
-            int(left_diag["target_rpm"]),
-            int(left_diag["current_rpm"]),
-            int(left_diag["p_term"]),
-            int(left_diag["i_term"]),
-            int(left_diag["d_term"]),
+        left_vals = (
+            float(left_diag["target_rpm"]),
+            float(left_diag["current_rpm"]),
+            float(left_diag["p_term"]),
+            float(left_diag["i_term"]),
+            float(left_diag["d_term"]),
             int(left_diag["output"]),
             int(left_diag["loop_time"])
         )
-        right_motor_values = (
-            int(right_diag["target_rpm"]),
-            int(right_diag["current_rpm"]),
-            int(right_diag["p_term"]),
-            int(right_diag["i_term"]),
-            int(right_diag["d_term"]),
+        right_vals = (
+            float(right_diag["target_rpm"]),
+            float(right_diag["current_rpm"]),
+            float(right_diag["p_term"]),
+            float(right_diag["i_term"]),
+            float(right_diag["d_term"]),
             int(right_diag["output"]),
             int(right_diag["loop_time"])
         )
 
-        # Updated message structure (all little-endian):
-        #   uint16: Start Delimiter
-        #   uint8:  Message Length
-        #   uint16: Message Counter
-        #   uint32: Timestamp (ms)
-        #   uint8:  Controller Timeout Flag
-        #   7 x int16: Left Motor diagnostics
-        #   7 x int16: Right Motor diagnostics
-        fmt_without_checksum = '<HBHIB7h7h'
+        # Build the format string:
+        # '<' for little-endian
+        # H: start delimiter; B: message length; H: message counter; I: timestamp; B: timeout flag;
+        # 5f2h: left motor diagnostics; 5f2h: right motor diagnostics.
+        fmt_without_checksum = '<HBHIB' + '5f2h' + '5f2h'
         packed = struct.pack(fmt_without_checksum,
                              self.start_delimiter,
                              self.msg_length,
                              self.msg_counter,
                              timestamp,
                              timeout_flag,
-                             *left_motor_values,
-                             *right_motor_values)
-
-        # Compute the checksum over the packed bytes.
+                             *left_vals,
+                             *right_vals)
         checksum = self.compute_checksum(packed)
         packed_checksum = struct.pack('<H', checksum)
-
-        # Final message is the packed data plus the checksum.
         message = packed + packed_checksum
 
-        # Send the binary message over UART.
         self.uart.write(message)
-
+        
     def receive_control_message(self):
         """
         Check the UART for an incoming control message, parse it, and print its contents.
