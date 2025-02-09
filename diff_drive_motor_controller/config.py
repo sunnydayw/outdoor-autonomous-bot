@@ -7,27 +7,27 @@ and robot geometry. All units are in SI unless noted otherwise.
 import math
 
 # ===== PWM Settings =====
-PWM_FREQ = 1000  # PWM frequency in Hz
+PWM_FREQ = 10000  # PWM frequency in Hz
 
 # ===== Motor PWM Limits =====
 FULL_DUTY = 65535          # Maximum duty cycle value (16-bit)
-MAX_DUTY_PERCENT = 0.35    # Limit duty cycle to 35% of full power for safety
+MAX_DUTY_PERCENT = 0.65    # Limit duty cycle to 35% of full power for safety
 MAX_DUTY = int(MAX_DUTY_PERCENT * FULL_DUTY)
 MIN_DUTY = 8000            # Minimum duty cycle to overcome motor deadband
 
 # ===== PID Gains =====
 PID = {
-    "Kp": 7.0,    # Proportional gain
-    "Ki": 15.0,   # Integral gain
-    "Kd": 0.2     # Derivative gain
+    "Kp": 135.0,    # Proportional gain
+    "Ki": 150.0,   # Integral gain
+    "Kd": 25.0     # Derivative gain
 }
 
 # ===== Feed-Forward Parameters =====
-Kff = 135      # Feed-forward gain
-offset = 6116  # Constant offset for feed-forward
+Kff = 0#165      # Feed-forward gain
+offset = 0#6116  # Constant offset for feed-forward
 
 # ===== Slew-Rate Limiter Parameter =====
-SLEW_MAX_DELTA = 10000  # Maximum allowed change in PWM output per control loop iteration
+SLEW_MAX_DELTA = 1000  # Maximum allowed change in PWM output per control loop iteration
 
 # ===== Timeout Settings =====
 CMD_VEL_TIMEOUT = 500    # Timeout (in milliseconds) for cmd_vel commands
@@ -52,3 +52,4 @@ RIGHT_MOTOR_SPEED_PIN = 13
 RIGHT_MOTOR_DIRECTION_PIN = 12
 RIGHT_MOTOR_ENCODER_PIN = 11  
 RIGHT_MOTOR_BRAKE_PIN = 10    
+
