@@ -26,6 +26,9 @@ class Encoder:
         self._last_time = time.ticks_ms()
         self._last_count = 0
         self._rpm = 0.0
+
+        self._update_loop_time = 0 
+
         
     @property
     def ticks(self):
@@ -59,11 +62,6 @@ class Encoder:
         # Return cached value if called too frequently
         if dt_ms < 5:
             return round(abs(self._rpm), 2)
-            
-        # Update timing statistics
-        self._min_dt = min(self._min_dt, dt_ms)
-        self._max_dt = max(self._max_dt, dt_ms)
-        self._last_update_time = current_time
         
         # Calculate ticks count
         ticks = self._encoder_count - self._last_count
