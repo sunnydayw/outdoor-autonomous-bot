@@ -1,0 +1,9 @@
+{
+  "name": "ROS2 Dev Container",
+  "image": "ros_dev:latest",
+  "workspaceFolder": "/workspace",
+  "mounts": [
+    "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached"
+  ]
+}
+  
