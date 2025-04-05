@@ -1,6 +1,6 @@
 # Outdoor Autonomous Bot
 
-This project is a differential drive robot platform designed for autonomous outdoor navigation. It started as a lawn mowing idea but has expanded to include street cleaning, trash collection, and park maintenance, all with the goal of creating cleaner, greener spaces.
+This project plan to build a differential drive robot platform designed for semi-autonomous outdoor use. It started as a lawn mowing idea but has expanded to include street cleaning, trash collection, and park maintenance, all with the goal of creating cleaner, greener spaces.
 
 ## Motivation
 
@@ -10,36 +10,24 @@ While the ultimate solution is to encourage people not to litter in the first pl
 
 ## Roadmap
 
-1. **Build a Mobile Robot Base**
-    - Select key components such as the compute unit, motors, battery, and controller.
-    - Design and assemble a differential drive platform for basic mobility.
-    - Test basic movement and control to ensure the robot can move reliably.
-    - Optimize PID control loops for precise movement and turning.
+1. **Build a Base Mobile Robot platform**
 
-2. **Solve Navigation Challenges**
-    - Design and implement path planning and localization (e.g., LIDAR, GPS, or camera-based SLAM).
-    - Test autonomous navigation in outdoor environments, addressing challenges like terrain variability and GPS signal loss.
+    Goal: Assemble a robust mobile base with motor control, power management, and essential sensors (camera, IMU GPS, etc.). Ensure the Raspberry Pi (main controller) communicates reliably with the Pico (motor controller) and intergrate a RC receiver for manual control.
 
-3. **Integrate Lawn Mowing Design**
-    - Design and build a robust lawn mowing mechanism.
-    - Fine-tune path planning for lawn mowing-specific patterns.
-    - Test the lawn mowing functionality in controlled environments and evaluate its performance on different types of grass.
+2. **Perception Stack (Computer Vision)**
 
-4. **Develop Computer Vision for Trash Identification**
-    - Train object detection models to identify various litter types (e.g., bottle caps, cans, wrappers).
-    - Optimize for outdoor conditions, including lighting changes, cluttered environments, and seasonal variations.
-    - Validate the vision system with field data and iteratively improve detection accuracy.
+    Goal: Enable the robot to see and recognize trash and hazards. Develop a vision pipeline to detect small trash items (bottle caps, cigarette butts, plastic pieces) and dog poop with onboard cameras. Also, interpret camera data to identify traversable terrain (grass, roads, or sidewalk) and dangerous obstacles (e.g. stairs or drop-offs) in the park environment.
 
-5. **Design and Integrate a Robot Arm**
-    - Develop a robotic arm capable of picking up and sorting litter.
-    - Implement gripping mechanisms for handling different trash shapes and materials.
-    - Add sorting capabilities for separating recyclable and non-recyclable waste.
+3. **Autonomy and Path Planning**
 
-6. **Combine All Systems**
-    - Integrate navigation, vision, mowing (if applicable), and litter handling into a cohesive system.
-    - Test the robot's full functionality in real-world environments like parks or urban streets.
-    - Iterate on the design to improve reliability and efficiency.
-    - 
+    Goal: Enable the robot to navigate the park along predefined routes, deviate to pick up detected trash, and avoid obstacles. This involves mapping, localization, path planning, and low-level motion control.
+
+4. **User Interface (Mission Control Station)**
+
+    Goal: Create a user-friendly interface (desktop and/or tablet compatible) for monitoring and controlling the robot. The interface should display the robot’s status and position on a map, live video feed, and allow manual teleoperation or mission scheduling (waypoint queue). It will run on a base station computer or tablet communicating with the robot over wireless network.
+
+5. **Revisit Plan for Lawn Mowing and Robot Arm Function**
+
 ## Hardware
 
 This section provides a detailed Bill of Materials (BOM) for the mechanical and electrical components used in the robot design.
@@ -90,35 +78,21 @@ This section provides a detailed Bill of Materials (BOM) for the mechanical and 
 
 The software architecture is designed with a modular approach to separate low-level control and high-level control, ensuring efficient processing and scalability.
 
-### **Overview**
-The software is divided into two primary layers:
-1. **Low-Level Control**:
-   - Responsible for precise motor control (e.g., rotations, speed, and direction).
-   - Runs on a microcontroller (e.g., Raspberry Pi Pico 2 W) to offload tasks from the main controller.
+The software is divided into few different components:
+1. [**Motor Control**](docs/hubmotor_low_level_control.md):
 
-2. **High-Level Control**:
-   - Handles navigation, path planning, and integration with task-specific modules like computer vision and robotic arm control.
-   - Runs on the Raspberry Pi 5 using ROS 2.
+    Implements real-time motor control on the Raspberry Pi Pico 2 W. This module converts angular and linear velocity commands into precise PWM signals for the differential drive, integrates RC manual override
 
----
+2. [**SLAM & Navigation**](docs/high_level_control.md):
 
-### **Details**
-1. [Low-Level Control](docs/hubmotor_low_level_control.md)
-   - Focuses on motor control algorithms and GPIO handling.
-   - Includes methods for converting angular and linear velocity commands into motor outputs.
+    Deployed on the Raspberry Pi 5, this layer handles localization and path planning. It fuses data from GPS, wheel odometry, and (optionally) lidar to create a map of the operating environment, plan safe trajectories along predefined waypoints, and execute reactive obstacle avoidance.
 
-2. [High-Level Control](docs/high_level_control.md)
-   - Outlines the use of ROS 2 for navigation and task coordination.
-   - Discusses communication between the main controller and the low-level controller.
+3. **Computer Vision**:
 
----
+    Processes camera feeds in real time to detect general trash (bottle caps, cigarette butts, plastics) and pet waste. Using a lightweight object detection model (e.g., YOLO-based), this module identifies trash pickup points and drivable terrain, providing cues to the navigation system.
 
-### **Current Progress**
-- **Low-Level Control**:
-    - Developing scripts to control motor rotation and drive the robot specific distances.
-    - Testing and fine-tuning foundational low-level control algorithms to ensure precise and repeatable movement.
+4. **User Interface (Mission Control)**:
 
-- **High-Level Control**:
-  - TBD
+    A dashboard accessible via desktop and iPad that offers live telemetry, video streaming, and manual control. This interface includes an interactive map for mission planning, waypoint editing, and visual garbage mapping.
 
 ---
