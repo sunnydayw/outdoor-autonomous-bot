@@ -1,0 +1,37 @@
+[0.384s] Invoking command in '/workspace/Raspberry-Pi-5/src/publisher': PYTHONPATH=/workspace/Raspberry-Pi-5/build/publisher/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/workspace/Raspberry-Pi-5/install/publisher/lib/python3.12/site-packages: /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/publisher build --build-base /workspace/Raspberry-Pi-5/build/publisher/build install --record /workspace/Raspberry-Pi-5/build/publisher/install.log --single-version-externally-managed install_data
+[0.466s] running egg_info
+[0.467s] creating ../../build/publisher/publisher.egg-info
+[0.468s] writing ../../build/publisher/publisher.egg-info/PKG-INFO
+[0.470s] writing dependency_links to ../../build/publisher/publisher.egg-info/dependency_links.txt
+[0.471s] writing entry points to ../../build/publisher/publisher.egg-info/entry_points.txt
+[0.473s] writing requirements to ../../build/publisher/publisher.egg-info/requires.txt
+[0.474s] writing top-level names to ../../build/publisher/publisher.egg-info/top_level.txt
+[0.474s] writing manifest file '../../build/publisher/publisher.egg-info/SOURCES.txt'
+[0.480s] reading manifest file '../../build/publisher/publisher.egg-info/SOURCES.txt'
+[0.482s] writing manifest file '../../build/publisher/publisher.egg-info/SOURCES.txt'
+[0.483s] running build
+[0.484s] running build_py
+[0.486s] creating /workspace/Raspberry-Pi-5/build/publisher/build
+[0.487s] creating /workspace/Raspberry-Pi-5/build/publisher/build/lib
+[0.487s] creating /workspace/Raspberry-Pi-5/build/publisher/build/lib/publisher
+[0.488s] copying publisher/__init__.py -> /workspace/Raspberry-Pi-5/build/publisher/build/lib/publisher
+[0.488s] copying publisher/publisher.py -> /workspace/Raspberry-Pi-5/build/publisher/build/lib/publisher
+[0.489s] running install
+[0.490s] running install_lib
+[0.494s] creating /workspace/Raspberry-Pi-5/install/publisher/lib/python3.12/site-packages/publisher
+[0.494s] copying /workspace/Raspberry-Pi-5/build/publisher/build/lib/publisher/__init__.py -> /workspace/Raspberry-Pi-5/install/publisher/lib/python3.12/site-packages/publisher
+[0.497s] copying /workspace/Raspberry-Pi-5/build/publisher/build/lib/publisher/publisher.py -> /workspace/Raspberry-Pi-5/install/publisher/lib/python3.12/site-packages/publisher
+[0.499s] byte-compiling /workspace/Raspberry-Pi-5/install/publisher/lib/python3.12/site-packages/publisher/__init__.py to __init__.cpython-312.pyc
+[0.500s] byte-compiling /workspace/Raspberry-Pi-5/install/publisher/lib/python3.12/site-packages/publisher/publisher.py to publisher.cpython-312.pyc
+[0.500s] running install_data
+[0.501s] creating /workspace/Raspberry-Pi-5/install/publisher/share/ament_index
+[0.502s] creating /workspace/Raspberry-Pi-5/install/publisher/share/ament_index/resource_index
+[0.503s] creating /workspace/Raspberry-Pi-5/install/publisher/share/ament_index/resource_index/packages
+[0.504s] copying resource/publisher -> /workspace/Raspberry-Pi-5/install/publisher/share/ament_index/resource_index/packages
+[0.504s] copying package.xml -> /workspace/Raspberry-Pi-5/install/publisher/share/publisher
+[0.505s] running install_egg_info
+[0.508s] Copying ../../build/publisher/publisher.egg-info to /workspace/Raspberry-Pi-5/install/publisher/lib/python3.12/site-packages/publisher-0.0.0-py3.12.egg-info
+[0.516s] running install_scripts
+[0.551s] Installing talker script to /workspace/Raspberry-Pi-5/install/publisher/lib/publisher
+[0.552s] writing list of installed files to '/workspace/Raspberry-Pi-5/build/publisher/install.log'
+[0.581s] Invoked command in '/workspace/Raspberry-Pi-5/src/publisher' returned '0': PYTHONPATH=/workspace/Raspberry-Pi-5/build/publisher/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/workspace/Raspberry-Pi-5/install/publisher/lib/python3.12/site-packages: /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/publisher build --build-base /workspace/Raspberry-Pi-5/build/publisher/build install --record /workspace/Raspberry-Pi-5/build/publisher/install.log --single-version-externally-managed install_data

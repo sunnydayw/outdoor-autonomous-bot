@@ -1,0 +1,35 @@
+running egg_info
+creating ../../build/publisher/publisher.egg-info
+writing ../../build/publisher/publisher.egg-info/PKG-INFO
+writing dependency_links to ../../build/publisher/publisher.egg-info/dependency_links.txt
+writing entry points to ../../build/publisher/publisher.egg-info/entry_points.txt
+writing requirements to ../../build/publisher/publisher.egg-info/requires.txt
+writing top-level names to ../../build/publisher/publisher.egg-info/top_level.txt
+writing manifest file '../../build/publisher/publisher.egg-info/SOURCES.txt'
+reading manifest file '../../build/publisher/publisher.egg-info/SOURCES.txt'
+writing manifest file '../../build/publisher/publisher.egg-info/SOURCES.txt'
+running build
+running build_py
+creating /workspace/Raspberry-Pi-5/build/publisher/build
+creating /workspace/Raspberry-Pi-5/build/publisher/build/lib
+creating /workspace/Raspberry-Pi-5/build/publisher/build/lib/publisher
+copying publisher/__init__.py -> /workspace/Raspberry-Pi-5/build/publisher/build/lib/publisher
+copying publisher/publisher.py -> /workspace/Raspberry-Pi-5/build/publisher/build/lib/publisher
+running install
+running install_lib
+creating /workspace/Raspberry-Pi-5/install/publisher/lib/python3.12/site-packages/publisher
+copying /workspace/Raspberry-Pi-5/build/publisher/build/lib/publisher/__init__.py -> /workspace/Raspberry-Pi-5/install/publisher/lib/python3.12/site-packages/publisher
+copying /workspace/Raspberry-Pi-5/build/publisher/build/lib/publisher/publisher.py -> /workspace/Raspberry-Pi-5/install/publisher/lib/python3.12/site-packages/publisher
+byte-compiling /workspace/Raspberry-Pi-5/install/publisher/lib/python3.12/site-packages/publisher/__init__.py to __init__.cpython-312.pyc
+byte-compiling /workspace/Raspberry-Pi-5/install/publisher/lib/python3.12/site-packages/publisher/publisher.py to publisher.cpython-312.pyc
+running install_data
+creating /workspace/Raspberry-Pi-5/install/publisher/share/ament_index
+creating /workspace/Raspberry-Pi-5/install/publisher/share/ament_index/resource_index
+creating /workspace/Raspberry-Pi-5/install/publisher/share/ament_index/resource_index/packages
+copying resource/publisher -> /workspace/Raspberry-Pi-5/install/publisher/share/ament_index/resource_index/packages
+copying package.xml -> /workspace/Raspberry-Pi-5/install/publisher/share/publisher
+running install_egg_info
+Copying ../../build/publisher/publisher.egg-info to /workspace/Raspberry-Pi-5/install/publisher/lib/python3.12/site-packages/publisher-0.0.0-py3.12.egg-info
+running install_scripts
+Installing talker script to /workspace/Raspberry-Pi-5/install/publisher/lib/publisher
+writing list of installed files to '/workspace/Raspberry-Pi-5/build/publisher/install.log'
