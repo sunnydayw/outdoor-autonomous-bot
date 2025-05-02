@@ -1,0 +1,28 @@
+version: '3.8'
+services:
+  simulation:
+    build: ./simulation
+    container_name: simulation
+    ports:
+      - "8001:8001"
+
+  backend:
+    build: ./dashboard/backend
+    container_name: backend
+    depends_on:
+      - simulation
+    environment:
+      - SIM_URL=ws://simulation:8001/ws
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./dashboard/frontend
+    container_name: frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+# docker-compose up --build
+# Browse to http://localhost:8080 for the dashboard UI.
