@@ -1,6 +1,5 @@
 Pi IP address 192.168.0.50
 Installed Ubuntu 24.04.1 LTS
-
 To install ROS2 Jazzy https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html
 
 Create ROS2 Publisher and Subscriber Nodes
