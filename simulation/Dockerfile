@@ -14,5 +14,5 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY rover/ rover/
-COPY simulation_server.py .
-CMD ["python", "simulation_server.py"]
+COPY simulation_server/ simulation_server/
+CMD ["python", "simulation_server/server.py"]

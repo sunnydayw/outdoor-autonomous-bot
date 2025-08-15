@@ -106,7 +106,7 @@ def simulation_loop():
     # Load environment and robot
     p.loadURDF("plane.urdf")
     global robot
-    robot = p.loadURDF(URDF_PATH, basePosition=[0, 0, 0.16])
+    robot = p.loadURDF(URDF_PATH, basePosition=[0, 0, 0.155])
 
     # Simulate battery status (static for now)
     latest_state["status"] = {
@@ -230,14 +230,3 @@ if __name__ == "__main__":
     uvicorn.run("simulation_server:app", host="0.0.0.0", port=8001, log_level="info")
 
 
-"""
-Expected command example
-{
-  "command": {
-    "type": "twist",
-    "target_linear":  { "x":1.0, "y":0, "z":0 },
-    "target_angular": { "x":0, "y":0, "z":0 }
-  }
-}
-
-"""

@@ -1,52 +1,40 @@
 import asyncio
 import json
-import os
-import threading
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 import websockets
-
-# Environment variable for simulation server URL
-SIM_URL = os.environ.get("SIM_URL", "ws://simulation:8001/ws")
-
-# Shared state and connections
-global_state = None
-clients = set()
-
-async def sim_bridge():
-    global global_state
-    while True:
-        try:
-            async with websockets.connect(SIM_URL) as sim_ws:
-                async for msg in sim_ws:
-                    global_state = msg
-                    # broadcast to frontend clients
-                    for ws in set(clients):
-                        try:
-                            await ws.send_text(msg)
-                        except:
-                            clients.discard(ws)
-        except Exception:
-            await asyncio.sleep(1)
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from telemetry_bridge import telemetry_bridge, clients, global_state
+from config import SIM_URL
 
 app = FastAPI()
 
-@app.on_event("startup")
+@ app.on_event("startup")
 async def startup_event():
-    # start the bridge to simulation server
-    asyncio.create_task(sim_bridge())
+    # Launch the telemetry bridge when the server starts
+    asyncio.create_task(telemetry_bridge())
 
 @app.websocket("/ws")
 async def dashboard_ws(ws: WebSocket):
+    """
+    WebSocket endpoint for the dashboard UI.
+    - Sends the latest processed telemetry on connect.
+    - Forwards incoming command messages to the simulation or real robot.
+    """
     await ws.accept()
     clients.add(ws)
-    # send initial snapshot
-    if global_state:
-        await ws.send_text(global_state)
+
+    # Send initial telemetry snapshot if available
+    if global_state is not None:
+        await ws.send_text(json.dumps(global_state))
+
     try:
         while True:
-            raw = await ws.receive_text()
-            # forward command payload to sim
-            async with websockets.connect(SIM_URL) as sim_ws:
-                await sim_ws.send(raw)
+            raw_cmd = await ws.receive_text()
+            # Forward the raw command JSON to the telemetry source (sim or robot)
+            try:
+                async with websockets.connect(SIM_URL) as sim_ws:
+                    await sim_ws.send(raw_cmd)
+            except Exception:
+                # If forwarding fails, you could buffer or log the error
+                pass
     except WebSocketDisconnect:
         clients.discard(ws)
