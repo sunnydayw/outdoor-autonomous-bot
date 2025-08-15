@@ -16,8 +16,7 @@ LED = None
 try:
     LED = Pin("LED", Pin.OUT)   # e.g. RP2040
 except Exception:
-    if hasattr(config, "LED_PIN"):
-        LED = Pin(config.LED_PIN, Pin.OUT)
+    LED = None
 if LED:
     LED.value(0)  # start OFF
 
