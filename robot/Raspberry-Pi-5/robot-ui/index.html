@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Robot Teleop</title>
+  <!-- roslib.js from Robot Web Tools CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/roslib/build/roslib.min.js"></script>
+  <style>
+    :root { font-family: system-ui, sans-serif; }
+    body { max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    .row { display:flex; gap:.75rem; align-items:center; flex-wrap:wrap; margin:.5rem 0; }
+    button { padding:.9rem 1.1rem; font-size:1.1rem; border-radius:.6rem; border:1px solid #ccc; cursor:pointer; }
+    button:active { transform: scale(0.98); }
+    .grid { display:grid; gap:.75rem; grid-template-columns: repeat(3, 1fr); width: 360px; margin:0 auto; }
+    .status { padding:.5rem .75rem; border-radius:.5rem; background:#f5f5f5; display:inline-block; }
+    .sl { width: 220px; }
+    .muted { color:#666; font-size:.9rem; }
+    .center { text-align:center; }
+  </style>
+</head>
+<body>
+  <h1>Robot Teleop</h1>
+
+  <div class="row">
+    <span class="status" id="conn">Connecting…</span>
+  </div>
+
+  <div class="row">
+    <label>Linear (m/s): <span id="linVal">0.3</span></label>
+    <input class="sl" id="lin" type="range" min="0" max="1.0" step="0.01" value="0.3">
+  </div>
+  <div class="row">
+    <label>Angular (rad/s): <span id="angVal">1.0</span></label>
+    <input class="sl" id="ang" type="range" min="0" max="3.0" step="0.05" value="1.0">
+  </div>
+
+  <div class="grid" style="margin-top:1rem">
+    <span></span>
+    <button data-act="forward">↑</button>
+    <span></span>
+
+    <button data-act="left">←</button>
+    <button data-act="stop">■</button>
+    <button data-act="right">→</button>
+
+    <span></span>
+    <button data-act="back">↓</button>
+    <span></span>
+  </div>
+
+  <p class="center muted" style="margin-top:.75rem">
+    Keyboard: W/A/S/D or ↑/←/↓/→ to drive. Release key to stop.
+  </p>
+
+  <script>
+    // === 1) Connect to rosbridge ===
+    const ROSBRIDGE_URL = "ws://192.168.0.50:9090"; // <-- put your Pi IP here
+    const ros = new ROSLIB.Ros({ url: ROSBRIDGE_URL });
+
+    const connEl = document.getElementById('conn');
+    ros.on('connection', () => connEl.textContent = `Connected: ${ROSBRIDGE_URL}`);
+    ros.on('error', e => connEl.textContent = `Error: ${e}`);
+    ros.on('close', () => connEl.textContent = 'Disconnected');
+
+    // === 2) /cmd_vel publisher (geometry_msgs/Twist) ===
+    const cmdVel = new ROSLIB.Topic({
+      ros,
+      name: '/cmd_vel',
+      messageType: 'geometry_msgs/Twist'
+    });
+
+    function sendTwist(lx, az) {
+      const msg = new ROSLIB.Message({
+        linear:  { x: lx, y: 0.0, z: 0.0 },
+        angular: { x: 0.0, y: 0.0, z: az }
+      });
+      cmdVel.publish(msg);
+    }
+
+    // === 3) UI state ===
+    const lin = document.getElementById('lin');
+    const ang = document.getElementById('ang');
+    const linVal = document.getElementById('linVal');
+    const angVal = document.getElementById('angVal');
+    lin.addEventListener('input', () => linVal.textContent = (+lin.value).toFixed(2));
+    ang.addEventListener('input', () => angVal.textContent = (+ang.value).toFixed(2));
+
+    // Continuous publish while button/key held
+    let repeatTimer = null;
+    function startMotion(vx, wz) {
+      if (repeatTimer) clearInterval(repeatTimer);
+      sendTwist(vx, wz); // immediate
+      repeatTimer = setInterval(() => sendTwist(vx, wz), 100); // 10 Hz
+    }
+    function stopMotion() {
+      if (repeatTimer) { clearInterval(repeatTimer); repeatTimer = null; }
+      sendTwist(0, 0);
+    }
+
+    // Buttons (mouse + touch)
+    const actions = {
+      forward: () => startMotion(+lin.value, 0),
+      back:    () => startMotion(-(+lin.value), 0),
+      left:    () => startMotion(0, +ang.value),
+      right:   () => startMotion(0, -(+ang.value)),
+      stop:    () => stopMotion()
+    };
+    document.querySelectorAll('button[data-act]').forEach(btn => {
+      const act = btn.dataset.act;
+      const down = () => actions[act]();
+      const up   = () => stopMotion();
+      btn.addEventListener('mousedown', down);
+      btn.addEventListener('mouseup', up);
+      btn.addEventListener('mouseleave', up);
+      btn.addEventListener('touchstart', (e) => { e.preventDefault(); down(); }, {passive:false});
+      btn.addEventListener('touchend',   (e) => { e.preventDefault(); up(); },   {passive:false});
+    });
+
+    // ---- CONFIG ----
+    const DRIVE_MODE = 'diff'; // 'diff' for differential, 'holonomic' for mecanum/omni
+    const YAW_SIGN = +1;       // flip to -1 if your robot turns the opposite way
+
+    // Publish at 20 Hz while any key is held
+    const PUB_HZ = 20;
+    let keyTimer = null;
+    const down = new Set();
+
+    function computeMotionFromKeys() {
+    let vx = 0, vy = 0, wz = 0;
+
+    // forward/back
+    if (down.has('w') || down.has('ArrowUp'))    vx += +lin.value;
+    if (down.has('s') || down.has('ArrowDown'))  vx -= +lin.value;
+
+    if (DRIVE_MODE === 'diff') {
+        // turn left/right as yaw
+        if (down.has('a') || down.has('ArrowLeft'))  wz += (+ang.value) * YAW_SIGN;
+        if (down.has('d') || down.has('ArrowRight')) wz -= (+ang.value) * YAW_SIGN;
+    } else {
+        // holonomic strafe (optional, only if your base can strafe)
+        if (down.has('a') || down.has('ArrowLeft'))  vy += +lin.value;
+        if (down.has('d') || down.has('ArrowRight')) vy -= +lin.value;
+    }
+    return {vx, vy, wz};
+    }
+
+    function startKeyLoop() {
+    if (keyTimer) return;
+    // send immediately, then at fixed rate
+    const {vx, vy, wz} = computeMotionFromKeys();
+    sendTwist(vx, wz); // NOTE: Twist uses linear.x & angular.z; if you use holonomic, send linear.y too (see below)
+    keyTimer = setInterval(() => {
+        const {vx, vy, wz} = computeMotionFromKeys();
+        // If you actually use linear.y on your robot, extend sendTwist to include it.
+        sendTwist(vx, wz);
+    }, 1000 / PUB_HZ);
+    }
+
+    function stopKeyLoopIfIdle() {
+    if (down.size === 0 && keyTimer) {
+        clearInterval(keyTimer);
+        keyTimer = null;
+        sendTwist(0, 0);
+    }
+    }
+
+    window.addEventListener('keydown', (e) => {
+    // prevent page scrolling on arrows/space
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; // normalize
+    if (!down.has(k)) {
+        down.add(k);
+        startKeyLoop();
+    }
+    });
+
+    window.addEventListener('keyup', (e) => {
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    down.delete(k);
+    stopKeyLoopIfIdle();
+    });
+
+    // If you want holonomic linear.y **and** your robot supports it:
+    // Change sendTwist to:
+    // function sendTwist(lx, az, ly=0) {
+    //   const msg = new ROSLIB.Message({
+    //     linear:  { x: lx, y: ly, z: 0.0 },
+    //     angular: { x: 0.0, y: 0.0, z: az }
+    //   });
+    //   cmdVel.publish(msg);
+    // }
+  </script>
+</body>
+</html>

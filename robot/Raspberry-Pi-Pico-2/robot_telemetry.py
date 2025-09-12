@@ -102,8 +102,9 @@ class RobotTelemetry:
             self._rx_buf = self._rx_buf[self._CMD_LEN:]
 
             try:
-                start, length, count, v_mmps, w_mradps, crc_recv = struct.unpack(self._fmt_cmd)
+                start, length, count, v_mmps, w_mradps, crc_recv = struct.unpack(self._fmt_cmd, frame)
             except Exception:
+                print("Unpack err:", e, "len", len(frame))
                 continue
             if start != self.CMD_START or length != self._CMD_LEN:
                 continue
