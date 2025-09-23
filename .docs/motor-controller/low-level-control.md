@@ -1,5 +1,7 @@
 # Hub Motor Low-Level Control
 
+_Companion to [`overview.md`](overview.md) for developers wiring the Pico-based motor controller._
+
 This document provides detailed information on the low-level control implementation for the hub motors, including pin configuration, the JYQD_YL02D motor controller pinout, and integration with the Raspberry Pi Pico.
 
 ---

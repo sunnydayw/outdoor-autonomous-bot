@@ -1,13 +1,20 @@
 import asyncio
 import json
+from pathlib import Path
+
 import websockets
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
+
 from telemetry_bridge import telemetry_bridge, clients, global_state
 from config import SIM_URL
 
 app = FastAPI()
 
-@ app.on_event("startup")
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
+
+@app.on_event("startup")
 async def startup_event():
     # Launch the telemetry bridge when the server starts
     asyncio.create_task(telemetry_bridge())
@@ -38,3 +45,7 @@ async def dashboard_ws(ws: WebSocket):
                 pass
     except WebSocketDisconnect:
         clients.discard(ws)
+
+
+if STATIC_DIR.exists():
+    app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="dashboard")

@@ -26,6 +26,11 @@
     <span class="status" id="conn">Connecting…</span>
   </div>
 
+  <div class="row" style="flex-direction:column; align-items:flex-start; gap:.35rem; margin-top:.5rem">
+    <span class="muted">Telemetry</span>
+    <span id="telemetry">Waiting…</span>
+  </div>
+
   <div class="row">
     <label>Linear (m/s): <span id="linVal">0.3</span></label>
     <input class="sl" id="lin" type="range" min="0" max="1.0" step="0.01" value="0.3">
@@ -54,28 +59,85 @@
   </p>
 
   <script>
-    // === 1) Connect to rosbridge ===
-    const ROSBRIDGE_URL = "ws://192.168.0.50:9090"; // <-- put your Pi IP here
-    const ros = new ROSLIB.Ros({ url: ROSBRIDGE_URL });
-
+    // === 1) Connection configuration ===
+    const params = new URLSearchParams(window.location.search);
+    const CONTROL_MODE = params.get('mode') === 'rosbridge' ? 'rosbridge' : 'backend';
+    const DEFAULT_ROSBRIDGE = 'ws://192.168.0.50:9090';
+    const ROSBRIDGE_URL = params.get('rosbridge') || DEFAULT_ROSBRIDGE;
     const connEl = document.getElementById('conn');
-    ros.on('connection', () => connEl.textContent = `Connected: ${ROSBRIDGE_URL}`);
-    ros.on('error', e => connEl.textContent = `Error: ${e}`);
-    ros.on('close', () => connEl.textContent = 'Disconnected');
+    const telemetryEl = document.getElementById('telemetry');
 
-    // === 2) /cmd_vel publisher (geometry_msgs/Twist) ===
-    const cmdVel = new ROSLIB.Topic({
-      ros,
-      name: '/cmd_vel',
-      messageType: 'geometry_msgs/Twist'
-    });
+    let ros = null;
+    let cmdVel = null;
+    let dashboardWs = null;
+    let lastTelemetry = null;
+
+    const updateConn = (label) => connEl.textContent = `${label} (mode: ${CONTROL_MODE})`;
+    const describeTelemetry = (data) => {
+      if (!data) return 'Waiting…';
+      try {
+        const pos = data.pose?.position || {};
+        const vel = data.velocity?.linear || {};
+        const heading = data.heading;
+        const fmt = (v) => (typeof v === 'number' ? v.toFixed(2) : '—');
+        return `pos(${fmt(pos.x)}, ${fmt(pos.y)}) • lin.x ${fmt(vel.x)} • heading ${(typeof heading === 'number') ? heading.toFixed(2) : '—'}`;
+      } catch (err) {
+        return 'Telemetry parse error';
+      }
+    };
+
+    // === 2) Establish control channel ===
+    if (CONTROL_MODE === 'rosbridge') {
+      ros = new ROSLIB.Ros({ url: ROSBRIDGE_URL });
+      ros.on('connection', () => updateConn(`Connected to ${ROSBRIDGE_URL}`));
+      ros.on('error', (e) => updateConn(`Error: ${e}`));
+      ros.on('close', () => updateConn('Disconnected'));
+
+      cmdVel = new ROSLIB.Topic({
+        ros,
+        name: '/cmd_vel',
+        messageType: 'geometry_msgs/Twist'
+      });
+      telemetryEl.textContent = 'ROS bridge mode: monitor telemetry via ROS topics';
+    } else {
+      const defaultWs = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+      const DASHBOARD_WS_URL = params.get('dashboard_ws') || defaultWs;
+      dashboardWs = new WebSocket(DASHBOARD_WS_URL);
+      updateConn(`Connecting to ${DASHBOARD_WS_URL}`);
+
+      dashboardWs.onopen = () => updateConn(`Connected to ${DASHBOARD_WS_URL}`);
+      dashboardWs.onerror = () => updateConn('Dashboard WS error');
+      dashboardWs.onclose = () => updateConn('Dashboard WS closed');
+      dashboardWs.onmessage = (event) => {
+        try {
+          lastTelemetry = JSON.parse(event.data);
+          telemetryEl.textContent = describeTelemetry(lastTelemetry);
+        } catch (err) {
+          telemetryEl.textContent = 'Telemetry parsing failed';
+        }
+      };
+    }
 
     function sendTwist(lx, az) {
-      const msg = new ROSLIB.Message({
-        linear:  { x: lx, y: 0.0, z: 0.0 },
-        angular: { x: 0.0, y: 0.0, z: az }
-      });
-      cmdVel.publish(msg);
+      if (CONTROL_MODE === 'rosbridge') {
+        if (!cmdVel) return;
+        const msg = new ROSLIB.Message({
+          linear:  { x: lx, y: 0.0, z: 0.0 },
+          angular: { x: 0.0, y: 0.0, z: az }
+        });
+        cmdVel.publish(msg);
+        return;
+      }
+
+      if (!dashboardWs || dashboardWs.readyState !== WebSocket.OPEN) return;
+      const payload = {
+        command: {
+          type: 'twist',
+          target_linear:  { x: lx, y: 0.0, z: 0.0 },
+          target_angular: { x: 0.0, y: 0.0, z: az }
+        }
+      };
+      dashboardWs.send(JSON.stringify(payload));
     }
 
     // === 3) UI state ===

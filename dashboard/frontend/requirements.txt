@@ -1,7 +1,0 @@
-streamlit
-streamlit_autorefresh
-websocket-client
-plotly
-numpy
-pandas
-streamlit-plotly-events

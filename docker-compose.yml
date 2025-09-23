@@ -14,13 +14,5 @@ services:
     ports:
       - "8000:8000"
 
-  frontend:
-    build: ./dashboard/frontend
-    container_name: frontend
-    depends_on:
-      - backend
-    ports:
-      - "8501:8501"
-
-# docker-compose up --build
-# Browse to http://localhost:8080 for the dashboard UI.
+# docker compose up --build
+# Browse to http://localhost:8000 for the dashboard UI.
