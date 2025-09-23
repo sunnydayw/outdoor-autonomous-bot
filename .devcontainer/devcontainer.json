@@ -1,9 +1,17 @@
 {
-  "name": "ROS2 Dev Container",
-  "image": "ros_dev:latest",
-  "workspaceFolder": "/workspace",
-  "mounts": [
-    "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached"
-  ]
+  "name": "ROS2 Jazzy Dev Container",
+  "build": {
+      "dockerfile": "./Dockerfile",
+      "context": "./"
+  },
+  "customizations": {
+      "vscode": {
+          "extensions": [
+              "ms-vscode.cpptools",
+              "ms-python.python",
+              "ms-azuretools.vscode-docker"
+          ]
+      }
+  }
 }
   
