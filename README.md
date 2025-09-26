@@ -7,12 +7,6 @@ An outdoor-ready differential drive platform for semi-autonomous cleaning and gr
 - Pair approachable hardware with an open software stack so new capabilities (mapping, perception, manipulation) can be layered in iteratively.
 - Keep safety in focus—manual override, telemetry visibility, and controlled autonomy are first-class requirements.
 
-## Current Focus
-- Bring-up of the differential drive base, including motor PID control and RC override.
-- ROS 2 experimentation on Raspberry Pi 5 for inter-process messaging and future navigation stack integration.
-- Simulation pipeline that produces realistic telemetry for UI development and autonomy prototyping.
-- Responsive HTML/roslib.js teleoperation dashboard for quick command and status checks.
-
 ## System Architecture
 | Layer | Platform | Responsibilities | Status |
 | --- | --- | --- | --- |
@@ -63,7 +57,3 @@ _Detailed BOM tracking lives in the mechanical CAD notes and will migrate into d
 4. Layer in perception models for trash/hazard detection and handoff targets to the navigation stack.
 5. Explore manipulation attachments (collection bin, arm) once base navigation is stable.
 
-## Reference Documentation
-- Differential drive firmware notes: `.docs/motor-controller/overview.md`
-- Communication design between Pico and Pi: `.docs/motor-controller/communication.md`
-- Additional work-in-progress docs live under `.docs/` for hardware sketches and sensor research.

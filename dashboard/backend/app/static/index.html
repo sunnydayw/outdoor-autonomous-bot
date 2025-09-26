@@ -17,6 +17,10 @@
     .sl { width: 220px; }
     .muted { color:#666; font-size:.9rem; }
     .center { text-align:center; }
+    .video-panel { width:100%; margin:1.25rem 0; }
+    .video-panel h2 { margin:0 0 .5rem 0; font-size:1.1rem; }
+    .video-wrapper { background:#000; border-radius:.5rem; overflow:hidden; max-width:640px; width:100%; }
+    .video-feed { width:100%; display:block; background:#000; }
   </style>
 </head>
 <body>
@@ -29,6 +33,14 @@
   <div class="row" style="flex-direction:column; align-items:flex-start; gap:.35rem; margin-top:.5rem">
     <span class="muted">Telemetry</span>
     <span id="telemetry">Waiting…</span>
+  </div>
+
+  <div class="video-panel">
+    <h2>Live Camera</h2>
+    <div class="video-wrapper">
+      <img id="videoStream" class="video-feed" src="/video/stream" alt="Live camera feed" />
+    </div>
+    <p class="muted" style="margin-top:.35rem">If the video freezes, it reconnects automatically.</p>
   </div>
 
   <div class="row">
@@ -66,6 +78,7 @@
     const ROSBRIDGE_URL = params.get('rosbridge') || DEFAULT_ROSBRIDGE;
     const connEl = document.getElementById('conn');
     const telemetryEl = document.getElementById('telemetry');
+    const videoEl = document.getElementById('videoStream');
 
     let ros = null;
     let cmdVel = null;
@@ -116,6 +129,20 @@
           telemetryEl.textContent = 'Telemetry parsing failed';
         }
       };
+    }
+
+    if (videoEl) {
+      let retryTimer = null;
+      const reloadStream = () => {
+        videoEl.src = `/video/stream?cacheBust=${Date.now()}`;
+      };
+      videoEl.addEventListener('error', () => {
+        if (retryTimer) return;
+        retryTimer = setTimeout(() => {
+          retryTimer = null;
+          reloadStream();
+        }, 2000);
+      });
     }
 
     function sendTwist(lx, az) {

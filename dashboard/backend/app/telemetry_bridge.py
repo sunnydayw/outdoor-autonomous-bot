@@ -2,7 +2,7 @@ import asyncio
 import math
 import json
 import websockets
-from config import SIM_URL
+from .config import SIM_URL
 
 # Connected dashboard clients and latest state
 clients = set()

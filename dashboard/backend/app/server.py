@@ -3,11 +3,13 @@ import json
 from pathlib import Path
 
 import websockets
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from telemetry_bridge import telemetry_bridge, clients, global_state
-from config import SIM_URL
+from .telemetry_bridge import telemetry_bridge, clients, global_state
+from .config import SIM_URL
+from .camera_stream import mjpeg_stream, BOUNDARY
 
 app = FastAPI()
 
@@ -45,6 +47,18 @@ async def dashboard_ws(ws: WebSocket):
                 pass
     except WebSocketDisconnect:
         clients.discard(ws)
+
+
+@app.get("/video/stream")
+def video_stream():
+    """Expose the USB camera as an MJPEG stream."""
+    try:
+        stream = mjpeg_stream()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    media_type = f"multipart/x-mixed-replace; boundary={BOUNDARY}"
+    return StreamingResponse(stream, media_type=media_type)
 
 
 if STATIC_DIR.exists():
