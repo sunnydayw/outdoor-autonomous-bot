@@ -3,10 +3,9 @@
 An outdoor-ready differential drive platform for semi-autonomous cleaning and grounds maintenance. The project explores an end-to-end stack: rugged hardware, low-level motion control, onboard perception, and a mission control dashboard for human-in-the-loop supervision.
 
 ## Vision
-- Reduce repetitive maintenance tasks such as litter pickup, light street sweeping, or lawn prep with a reliable robotic platform.
-- Pair approachable hardware with an open software stack so new capabilities (mapping, perception, manipulation) can be layered in iteratively.
-- Keep safety in focus—manual override, telemetry visibility, and controlled autonomy are first-class requirements.
-
+- Create a reliable robotic platform that prioritizes lawn mowing while progressively exploring tennis ball pickup, street litter collection, and snow plowing.
+- Pair approachable hardware with an open software stack while optimizing the mechanical design for combined 3D printing and laser cutting using affordable yet robust components.
+  
 ## System Architecture
 | Layer | Platform | Responsibilities | Status |
 | --- | --- | --- | --- |
