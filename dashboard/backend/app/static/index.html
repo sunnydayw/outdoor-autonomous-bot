@@ -21,6 +21,7 @@
     .video-panel h2 { margin:0 0 .5rem 0; font-size:1.1rem; }
     .video-wrapper { background:#000; border-radius:.5rem; overflow:hidden; max-width:640px; width:100%; }
     .video-feed { width:100%; display:block; background:#000; }
+    .video-controls { display:flex; align-items:center; gap:.75rem; margin-top:.5rem; }
   </style>
 </head>
 <body>
@@ -28,6 +29,7 @@
 
   <div class="row">
     <span class="status" id="conn">Connecting…</span>
+    <span class="status" id="cpu">CPU: —</span>
   </div>
 
   <div class="row" style="flex-direction:column; align-items:flex-start; gap:.35rem; margin-top:.5rem">
@@ -38,9 +40,13 @@
   <div class="video-panel">
     <h2>Live Camera</h2>
     <div class="video-wrapper">
-      <img id="videoStream" class="video-feed" src="/video/stream" alt="Live camera feed" />
+      <img id="videoStream" class="video-feed" src="" alt="Live camera feed" />
     </div>
-    <p class="muted" style="margin-top:.35rem">If the video freezes, it reconnects automatically.</p>
+    <div class="video-controls">
+      <button id="toggleVideo">Stop Stream</button>
+      <span class="muted" id="videoStatus">Streaming</span>
+    </div>
+    <p class="muted" style="margin-top:.35rem">If the video freezes, it reconnects automatically while streaming is enabled.</p>
   </div>
 
   <div class="row">
@@ -79,6 +85,9 @@
     const connEl = document.getElementById('conn');
     const telemetryEl = document.getElementById('telemetry');
     const videoEl = document.getElementById('videoStream');
+    const videoStatusEl = document.getElementById('videoStatus');
+    const toggleVideoBtn = document.getElementById('toggleVideo');
+    const cpuEl = document.getElementById('cpu');
 
     let ros = null;
     let cmdVel = null;
@@ -131,18 +140,80 @@
       };
     }
 
-    if (videoEl) {
+    if (videoEl && toggleVideoBtn) {
       let retryTimer = null;
-      const reloadStream = () => {
-        videoEl.src = `/video/stream?cacheBust=${Date.now()}`;
+      let enabled = true;
+
+      const clearTimers = () => {
+        if (retryTimer) {
+          clearTimeout(retryTimer);
+          retryTimer = null;
+        }
       };
+
+      const setStatus = (label) => {
+        if (videoStatusEl) videoStatusEl.textContent = label;
+      };
+
+      const startStream = () => {
+        if (!enabled) return;
+        clearTimers();
+        setStatus('Starting…');
+        toggleVideoBtn.textContent = 'Stop Stream';
+        setTimeout(() => {
+          if (!enabled) return;
+          videoEl.src = `/video/stream?cacheBust=${Date.now()}`;
+        }, 120);
+      };
+
+      const stopStream = () => {
+        clearTimers();
+        videoEl.removeAttribute('src');
+        setStatus('Stopped');
+        toggleVideoBtn.textContent = 'Start Stream';
+      };
+
+      videoEl.addEventListener('load', () => {
+        if (!enabled) return;
+        setStatus('Streaming');
+      });
+
+      toggleVideoBtn.addEventListener('click', () => {
+        enabled = !enabled;
+        if (enabled) {
+          startStream();
+        } else {
+          stopStream();
+        }
+      });
+
       videoEl.addEventListener('error', () => {
+        if (!enabled) return;
         if (retryTimer) return;
+        setStatus('Reconnecting…');
         retryTimer = setTimeout(() => {
           retryTimer = null;
-          reloadStream();
+          startStream();
         }, 2000);
       });
+
+      startStream();
+    }
+
+    if (cpuEl) {
+      const updateCpu = async () => {
+        try {
+          const resp = await fetch('/system/cpu', { cache: 'no-store' });
+          if (!resp.ok) throw new Error('Request failed');
+          const data = await resp.json();
+          const val = typeof data.cpu_percent === 'number' ? data.cpu_percent.toFixed(1) : null;
+          cpuEl.textContent = val !== null ? `CPU: ${val}%` : 'CPU: —';
+        } catch (err) {
+          cpuEl.textContent = 'CPU: —';
+        }
+      };
+      updateCpu();
+      setInterval(updateCpu, 2000);
     }
 
     function sendTwist(lx, az) {

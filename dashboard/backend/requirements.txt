@@ -3,3 +3,4 @@ uvicorn[standard]
 websockets
 aiofiles
 opencv-python-headless
+psutil

@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import websockets
+import psutil
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,6 +20,7 @@ STATIC_DIR = BASE_DIR / "static"
 @app.on_event("startup")
 async def startup_event():
     # Launch the telemetry bridge when the server starts
+    psutil.cpu_percent(interval=None)
     asyncio.create_task(telemetry_bridge())
 
 @app.websocket("/ws")
@@ -59,6 +61,12 @@ def video_stream():
 
     media_type = f"multipart/x-mixed-replace; boundary={BOUNDARY}"
     return StreamingResponse(stream, media_type=media_type)
+
+
+@app.get("/system/cpu")
+def cpu_load():
+    """Return the current system-wide CPU utilisation percentage."""
+    return {"cpu_percent": psutil.cpu_percent(interval=None)}
 
 
 if STATIC_DIR.exists():
