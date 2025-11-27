@@ -50,6 +50,11 @@ class Encoder:
         """Most recent RPM, smoothed over the window."""
         return round(abs(self._rpm), 2)
 
+    @property
+    def signed_rpm(self):
+        """Return the signed RPM (useful for computing linear velocity)."""
+        return round(self._rpm, 2)
+
     def reset(self):
         """Zero count and RPM history."""
         self._count      = 0

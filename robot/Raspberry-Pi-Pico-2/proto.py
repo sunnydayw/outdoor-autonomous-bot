@@ -198,6 +198,16 @@ class DriveFeedbackPayload:
         )
 
 
+class DriveFeedbackStatusFlags:
+    """Bitmask for DriveFeedbackPayload.status_flags."""
+
+    COMMAND_TIMEOUT     = 1 << 0
+    LEFT_ENCODER_FAULT  = 1 << 1
+    RIGHT_ENCODER_FAULT = 1 << 2
+    LEFT_DRIVER_SAT     = 1 << 3
+    RIGHT_DRIVER_SAT    = 1 << 4
+
+
 # ------------------- BatteryStatus payload -------------------
 
 class BatteryStatusFlags:
