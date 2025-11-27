@@ -262,41 +262,42 @@ class PicoLowLevelLink:
         seq = self._next_seq()
         header = proto.Header.now(seq)
 
-        # Try to get real feedback from controller
-        v_meas = self._last_cmd_v
-        omega_meas = self._last_cmd_omega
-        left_ticks = 0
-        right_ticks = 0
-        left_rpm = 0.0
-        right_rpm = 0.0
-        status_flags = 0
-
-        if hasattr(self.ctrl, "get_drive_feedback"):
-            try:
-                fb = self.ctrl.get_drive_feedback()
-                v_meas = fb.get("v_meas", v_meas)
-                omega_meas = fb.get("omega_meas", omega_meas)
-                left_ticks = fb.get("left_ticks", left_ticks)
-                right_ticks = fb.get("right_ticks", right_ticks)
-                left_rpm = fb.get("left_rpm", left_rpm)
-                right_rpm = fb.get("right_rpm", right_rpm)
-                status_flags = fb.get("status_flags", status_flags)
-            except Exception as e:
-                if self.debug:
-                    print("get_drive_feedback error:", e)
+        fb = self._fetch_drive_feedback()
 
         payload_obj = proto.DriveFeedbackPayload(
             header=header,
-            v_meas=v_meas,
-            omega_meas=omega_meas,
-            left_ticks=left_ticks,
-            right_ticks=right_ticks,
-            left_rpm=left_rpm,
-            right_rpm=right_rpm,
-            status_flags=status_flags,
+            v_meas=fb["v_meas"],
+            omega_meas=fb["omega_meas"],
+            left_ticks=fb["left_ticks"],
+            right_ticks=fb["right_ticks"],
+            left_rpm=fb["left_rpm"],
+            right_rpm=fb["right_rpm"],
+            status_flags=fb["status_flags"],
         )
         pkt = self._build_packet(self.MSG_ID_DRIVE_FEEDBACK, payload_obj.to_bytes())
         self.uart.write(pkt)
+
+    def _fetch_drive_feedback(self):
+        base = {
+            "v_meas": self._last_cmd_v,
+            "omega_meas": self._last_cmd_omega,
+            "left_ticks": 0,
+            "right_ticks": 0,
+            "left_rpm": 0.0,
+            "right_rpm": 0.0,
+            "status_flags": 0,
+        }
+
+        if hasattr(self.ctrl, "get_drive_feedback"):
+            try:
+                fb = self.ctrl.get_drive_feedback() or {}
+                for key in tuple(base.keys()):
+                    if key in fb:
+                        base[key] = fb[key]
+            except Exception as e:
+                if self.debug:
+                    print("get_drive_feedback error:", e)
+        return base
 
     def _read_battery(self):
         """Return (voltage, current, soc, temperature, status_flags). Placeholder model."""
