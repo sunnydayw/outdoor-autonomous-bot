@@ -11,11 +11,15 @@ class Encoder:
 
     - Uses IRQ on channel A and reads channel B to determine direction.
     - Maintains a sliding time window of recent tick deltas to compute RPM.
-    - Exposes basic diagnostics for system health / status flags.
+    - Exposes diagnostics for system health / status flags.
     """
 
     # Minimum time between RPM updates, in milliseconds.
-    _MIN_UPDATE_MS = 5
+    _MIN_UPDATE_INTERVAL_MS = 5
+
+    # Maximum expected update_rpm() execution time, in microseconds.
+    # If exceeded, a diagnostic flag will be raised.
+    _MAX_EXEC_TIME_US = 500  # tune as needed for your platform
 
     # Maximum number of samples kept in the sliding window (safety bound).
     _MAX_SAMPLES = 64
@@ -56,11 +60,12 @@ class Encoder:
         self._rpm        = 0.0
 
         # --- Diagnostics state ---
-        self._exec_time_us     = 0         # Duration of last update_rpm() call
-        self._last_update_ms   = self._last_time
-        self._last_edge_ms     = None      # Time of last encoder edge
-        self._last_delta_ticks = 0         # Last tick delta between updates
-        self._no_pulses_window = False     # True if no ticks in current window
+        self._exec_time_us        = 0         # Duration of last update_rpm()
+        self._exec_time_exceeded  = False     # True if > _MAX_EXEC_TIME_US
+        self._last_update_ms      = self._last_time
+        self._last_edge_ms        = None      # Time of last encoder edge
+        self._last_delta_ticks    = 0         # Last tick delta between updates
+        self._no_pulses_window    = False     # True if no ticks in current window
 
     # ------------------------------------------------------------------
     # Properties
@@ -101,11 +106,12 @@ class Encoder:
         self._rpm        = 0.0
 
         # Diagnostics reset
-        self._exec_time_us     = 0
-        self._last_update_ms   = now
-        self._last_edge_ms     = None
-        self._last_delta_ticks = 0
-        self._no_pulses_window = False
+        self._exec_time_us        = 0
+        self._exec_time_exceeded  = False
+        self._last_update_ms      = now
+        self._last_edge_ms        = None
+        self._last_delta_ticks    = 0
+        self._no_pulses_window    = False
 
     def update_rpm(self):
         """
@@ -122,14 +128,14 @@ class Encoder:
         dt_ms  = time.ticks_diff(now_ms, self._last_time)
 
         # If called too frequently, keep the last RPM value.
-        if dt_ms < self._MIN_UPDATE_MS:
-            self._exec_time_us = time.ticks_diff(time.ticks_us(), start_us)
+        if dt_ms < self._MIN_UPDATE_INTERVAL_MS:
+            end_us = time.ticks_us()
+            elapsed_us = time.ticks_diff(end_us, start_us)
+            self._exec_time_us       = elapsed_us
+            self._exec_time_exceeded = (elapsed_us > self._MAX_EXEC_TIME_US)
             return self.rpm
 
         # Compute tick delta since last update.
-        # NOTE: _count is updated in IRQ context; reading it here is generally
-        # acceptable for this application, but can be wrapped in a small
-        # critical section if absolute atomicity is required.
         curr_count = self._count
         delta      = curr_count - self._last_count
 
@@ -137,8 +143,10 @@ class Encoder:
         self._samples.append((now_ms, delta, dt_ms))
         self._last_count       = curr_count
         self._last_time        = now_ms
+        self._last_update_ms   = now_ms
+        self._last_delta_ticks = delta
 
-        # Bound the number of samples for safety (avoid unbounded growth).
+        # Bound the number of samples for safety.
         if len(self._samples) > self._MAX_SAMPLES:
             self._samples.pop(0)
 
@@ -152,10 +160,8 @@ class Encoder:
         total_time_ms = sum(s[2] for s in self._samples)
 
         if total_time_ms > 0:
-            # ticks → revolutions → minutes
             revs = total_ticks / self._ticks_per_rev
             mins = (total_time_ms / 1000.0) / 60.0
-            # Guard against division by zero (paranoia)
             self._rpm = revs / mins if mins > 0 else 0.0
         else:
             # Not enough time elapsed: treat as no motion for this window.
@@ -163,11 +169,12 @@ class Encoder:
 
         # Diagnostics: did we see any pulses in this window?
         self._no_pulses_window = (total_ticks == 0)
-        self._last_update_ms   = now_ms
-        self._last_delta_ticks = delta
-        
-        # Record execution time for diagnostics.
-        self._exec_time_us = time.ticks_diff(time.ticks_us(), start_us)
+
+        # Record execution time and threshold flag.
+        end_us = time.ticks_us()
+        elapsed_us = time.ticks_diff(end_us, start_us)
+        self._exec_time_us       = elapsed_us
+        self._exec_time_exceeded = (elapsed_us > self._MAX_EXEC_TIME_US)
 
         return self.rpm
 
@@ -178,18 +185,16 @@ class Encoder:
         This is intended to feed a higher-level SystemStatus / health monitor.
 
         Fields:
-            ticks:             Current tick count.
-            rpm:               Latest signed RPM (float).
-            samples_in_window: Number of samples used for RPM smoothing.
-            window_ms:         Configured smoothing window.
-            last_update_age_ms:Time since last successful update_rpm() call.
-            last_edge_age_ms:  Time since last encoder edge (None if never).
-            last_delta_ticks:  Tick delta at last update.
-            no_pulses_window:  True if no ticks seen in current window.
-            exec_time_us:      Duration of last update_rpm() in microseconds.
-            stale_rpm:         True if last_update_age_ms is much larger than
-                               the smoothing window (update_rpm not called
-                               often enough or loop stalled).
+            ticks:              Current tick count.
+            rpm:                Latest signed RPM (float).
+            samples_in_window:  Number of samples used for RPM smoothing.
+            window_ms:          Configured smoothing window.
+            last_update_age_ms: Time since last successful update_rpm().
+            last_edge_age_ms:   Time since last encoder edge (None if never).
+            last_delta_ticks:   Tick delta at last update.
+            no_pulses_window:   True if no ticks seen in the current window.
+            exec_time_us:       Duration of last update_rpm() call.
+            exec_time_exceeded: True if exec_time_us > _MAX_EXEC_TIME_US.
         """
         now_ms = time.ticks_ms()
 
@@ -199,9 +204,6 @@ class Encoder:
             last_edge_age_ms = time.ticks_diff(now_ms, self._last_edge_ms)
         else:
             last_edge_age_ms = None
-
-        # Consider RPM "stale" if we haven't updated in ~3 windows.
-        stale_rpm = last_update_age_ms > (3 * self._window_ms)
 
         return {
             "ticks":              self._count,
@@ -213,7 +215,7 @@ class Encoder:
             "last_delta_ticks":   self._last_delta_ticks,
             "no_pulses_window":   self._no_pulses_window,
             "exec_time_us":       self._exec_time_us,
-            "stale_rpm":          stale_rpm,
+            "exec_time_exceeded": self._exec_time_exceeded
         }
 
     # ------------------------------------------------------------------
