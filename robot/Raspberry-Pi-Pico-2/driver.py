@@ -1,7 +1,6 @@
 # driver.py
 from machine import Pin, PWM
 
-
 class HBridgeChannel:
     """
     Low-level control of one TB6612 channel (A or B).
@@ -27,9 +26,11 @@ class HBridgeChannel:
         self.pwm.freq(freq)
         self.pwm.duty_u16(0)
 
-        # Optional: track last command for debugging / telemetry
-        self._last_dir = 0   # +1 forward, -1 reverse, 0 stopped
-        self._last_duty = 0  # 0..65535
+        # Track last command for debugging / telemetry.
+        # +1 forward, -1 reverse, 0 stopped.
+        self._last_dir = 0
+        # Last duty value in 0..65535.
+        self._last_duty = 0
 
     def apply_direction(self, rpm: float, invert: bool = False) -> None:
         """
@@ -81,10 +82,32 @@ class HBridgeChannel:
         self._last_duty = 0
         self._last_dir = 0
 
+    def get_state(self) -> dict:
+        """
+        Get current channel state for diagnostics.
+
+        Returns:
+            {
+                "direction":  -1, 0, +1,
+                "duty":       0..65535,
+                "in1":        0 or 1,
+                "in2":        0 or 1,
+                "pwm_freq":   PWM frequency in Hz,
+            }
+        """
+        return {
+            "direction": self._last_dir,
+            "duty":      self._last_duty,
+            "in1":       self.in1.value(),
+            "in2":       self.in2.value(),
+            "pwm_freq":  self.pwm.freq(),
+        }
 
 class TB6612Driver:
     """
     Driver for one TB6612FNG chip: two channels (A & B) plus STBY pin.
+    Provides high-level interface for dual motor control with safety features.
+
     """
 
     def __init__(
@@ -102,10 +125,16 @@ class TB6612Driver:
         """
         # STBY high → chip enabled
         self.stby = Pin(standby_pin, Pin.OUT)
-        self.stby.value(1)
 
+        # Initialize both channels in coast mode
         self.channel_a = HBridgeChannel(in1_a, in2_a, pwm_a, freq)
         self.channel_b = HBridgeChannel(in1_b, in2_b, pwm_b, freq)
+
+        # Enable driver (motors can now be controlled)
+        self.enable()
+        
+        # Logical enable state (our view of whether the driver is enabled).
+        self._enabled = True
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -136,6 +165,8 @@ class TB6612Driver:
     def enable(self) -> None:
         """Bring STBY high to enable the driver outputs."""
         self.stby.value(1)
+        self._enabled = True
+
 
     def disable(self) -> None:
         """
@@ -146,6 +177,7 @@ class TB6612Driver:
         """
         self.brake()     # coast both channels
         self.stby.value(0)
+        self._enabled = False
 
     def apply_direction(self, channel: str, rpm: float, invert: bool = False) -> None:
         """
@@ -159,30 +191,6 @@ class TB6612Driver:
         Set PWM duty (0..65535) for the given channel.
         """
         h = self._get_channel(channel)
-        h.set_duty(duty)
-
-    def drive(self, channel: str, command: float, invert: bool = False) -> None:
-        """
-        Convenience method: drive a channel with a signed command.
-
-        :param channel: 'A' or 'B'.
-        :param command: in range [-1.0, 1.0]; sign = direction,
-                        magnitude = speed (scaled to 0..65535).
-        :param invert:  If True, flips logical direction.
-        """
-        # Clamp command
-        if command > 1.0:
-            command = 1.0
-        elif command < -1.0:
-            command = -1.0
-
-        h = self._get_channel(channel)
-
-        # Direction from sign
-        h.apply_direction(command, invert)
-
-        # Duty from magnitude
-        duty = int(abs(command) * 65535)
         h.set_duty(duty)
 
     def brake(self, channel: str = None) -> None:
@@ -201,3 +209,35 @@ class TB6612Driver:
 
         h = self._get_channel(channel)
         h.brake()
+
+    def emergency_stop(self):
+        """
+        Emergency stop: brake both motors and disable driver.
+        Use this for safety-critical situations.
+        """
+        self.brake()  # Brake both channels
+        self.disable()  # Disable driver chip
+
+    def get_diagnostics(self) -> dict:
+        """
+        Return driver state including both channels and enable / STBY status.
+
+        Returns:
+            {
+                "enabled":   bool (logical enable state),
+                "stby_pin":  0 or 1 (actual STBY pin level),
+                "channel_a": { ... see HBridgeChannel.get_state() ... },
+                "channel_b": { ... see HBridgeChannel.get_state() ... },
+            }
+
+        Notes:
+            - `enabled` is the logical state as seen by this driver class.
+            - `stby_pin` is the actual pin level; if they disagree, the pin
+              may have been manipulated outside this driver.
+        """
+        return {
+            "enabled":  self._enabled,
+            "stby_pin": self.stby.value(),
+            "channel_a": self.channel_a.get_state(),
+            "channel_b": self.channel_b.get_state(),
+        }
