@@ -1,31 +1,37 @@
-"""drive_system.py
+# drive_system.py
+"""
+DriveSystem
 
-Convenience helpers that assemble the complete drive stack (driver, encoders,
-PID controllers, motors, and the differential-drive controller) from the global
-``config`` module.
+Convenience wrapper that assembles the complete drive stack:
+    - TB6612 motor driver
+    - Encoders
+    - PID controllers
+    - Motor wrappers
+    - Differential drive controller
 
-It keeps the existing low-level classes decoupled while offering a compact,
-readable way to bring the hardware online inside ``main.py`` or test scripts.
+All hardware configuration is pulled from the global `config` module, so
+`main.py` can stay small and focused on behavior.
 """
 
+import config
 from driver import TB6612Driver
 from encoder import Encoder
 from motor import Motor
 from pid import PIDController
 from differential_drivetrain import DiffDriveController
-import config
 
 
 class DriveSystem:
-    """Bundle the drive electronics and expose a single controller handle."""
+    """Bundle the drive electronics and expose a simple high-level API."""
 
     def __init__(self,
                  cfg=config,
-                 invert_left=False,
-                 invert_right=False,
-                 min_loop_ms=5):
+                 invert_left: bool = False,
+                 invert_right: bool = False,
+                 min_loop_ms: int = 5):
         self.cfg = cfg
 
+        # --- Low-level driver (TB6612) ---
         self.driver = TB6612Driver(
             in1_a=cfg.MOTOR1_IN1_PIN,
             in2_a=cfg.MOTOR1_IN2_PIN,
@@ -37,9 +43,11 @@ class DriveSystem:
             freq=cfg.PWM_FREQ,
         )
 
+        # --- Encoders ---
         self.left_encoder = Encoder(cfg.ENC_1A_PIN, cfg.ENC_1B_PIN)
         self.right_encoder = Encoder(cfg.ENC_2A_PIN, cfg.ENC_2B_PIN)
 
+        # --- PID Controllers (cloned config) ---
         pid_kwargs = dict(
             Kp=cfg.PID["Kp"],
             Ki=cfg.PID["Ki"],
@@ -49,35 +57,82 @@ class DriveSystem:
             slewrate=getattr(cfg, "SLEW_MAX_DELTA", None),
             duty_min=getattr(cfg, "MIN_DUTY", 0),
             duty_max=getattr(cfg, "MAX_DUTY", 65535),
+            integral_limit=getattr(cfg, "INTEGRAL_LIMIT", None),
         )
 
         self.left_pid = PIDController(**pid_kwargs)
         self.right_pid = PIDController(**pid_kwargs)
 
-        self.left_motor = Motor(self.driver, 'A', self.left_encoder,
-                                self.left_pid, invert=invert_left,
-                                min_loop_ms=min_loop_ms)
-        self.right_motor = Motor(self.driver, 'B', self.right_encoder,
-                                 self.right_pid, invert=invert_right,
-                                 min_loop_ms=min_loop_ms)
+        # --- High-level motors ---
+        self.left_motor = Motor(
+            self.driver, 'A',
+            self.left_encoder,
+            self.left_pid,
+            invert=invert_left,
+            min_loop_ms=min_loop_ms,
+        )
+        self.right_motor = Motor(
+            self.driver, 'B',
+            self.right_encoder,
+            self.right_pid,
+            invert=invert_right,
+            min_loop_ms=min_loop_ms,
+        )
 
+        # --- Differential drive controller ---
         self.controller = DiffDriveController(
             self.left_motor,
             self.right_motor,
             wheel_circumference=cfg.WHEEL_CIRCUMFERENCE,
             wheel_separation=cfg.WHEEL_SEPARATION,
-            cmd_vel_timeout=cfg.CMD_VEL_TIMEOUT,
+            cmd_vel_timeout_ms=cfg.CMD_VEL_TIMEOUT,
         )
 
-    # Convenience pass-throughs -------------------------------------------------
-    def update(self):
+    # ------------------------------------------------------------------
+    # High-level facade API
+    # ------------------------------------------------------------------
+
+    def set_cmd_vel(self, linear_mps: float, angular_rps: float) -> None:
+        """
+        Set desired body velocities for the robot.
+
+        :param linear_mps:  Linear velocity [m/s].
+        :param angular_rps: Angular velocity [rad/s].
+        """
+        self.controller.update_cmd_vel(linear_mps, angular_rps)
+
+    def update(self) -> None:
+        """
+        Run one control-loop iteration for the drive stack.
+
+        Call this regularly in main (e.g. 20–100 Hz).
+        """
         self.controller.update_motors()
 
-    def stop(self):
-        self.controller.stop_motors()
+    def stop(self, brake: bool = True) -> None:
+        """
+        Stop the robot by stopping both motors.
 
-    def get_drive_feedback(self):
+        :param brake: If True, request motor brake after stopping.
+        """
+        self.controller.stop_motors(brake=brake)
+
+    def emergency_stop(self) -> None:
+        """
+        Emergency stop entire drive system (if supported by driver).
+
+        - Attempts driver.emergency_stop() if available.
+        - Otherwise falls back to stop() with brake=True.
+        """
+        if hasattr(self.driver, "emergency_stop"):
+            self.driver.emergency_stop()
+        else:
+            self.stop(brake=True)
+
+    def get_drive_feedback(self) -> dict:
+        """Return a telemetry snapshot of the drive state."""
         return self.controller.get_drive_feedback()
 
-    def get_diagnostics(self):
+    def get_diagnostics(self) -> dict:
+        """Return diagnostics from the diff-drive controller."""
         return self.controller.get_diagnostics()
