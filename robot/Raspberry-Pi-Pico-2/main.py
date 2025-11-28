@@ -1,31 +1,51 @@
 # main.py
+#
+# Top-level control loop for the robot base on Pico.
+#
+# Responsibilities:
+#   - Initialize hardware (drive system, UART link, optional IMU).
+#   - Run the drive control loop at a fixed period.
+#   - Optionally accept cmd_vel from Pi 5 via UART, or drive locally for testing.
+#   - Maintain a heartbeat LED.
+#   - Print diagnostics periodically for first-run troubleshooting.
+
 from machine import Pin, I2C
 from time import ticks_ms, ticks_diff, ticks_add, sleep_ms
+import config
 
 from drive_system import DriveSystem
 from pico_uart_comm import PicoLowLevelLink
 from MPU6050 import MPU6050
-import config
 
-# ===================== knobs =====================
-DEBUG_PRINT            = False   # console diagnostics on/off
-TELEMETRY_DEBUG_FRAME  = False   # True = big debug frame, False = compact frame
-USE_UART_CMD           = True    # True = listen to host's cmd_vel; False = local test command
+
+# ===================== configuration knobs =====================
+
+DEBUG_PRINT            = True    # Console diagnostics on/off
+USE_UART_CMD           = True    # True = listen to Pi's cmd_vel; False = local test command
 LOCAL_V_CMD            = 0.50    # m/s (used only if USE_UART_CMD=False)
 LOCAL_W_CMD            = 0.00    # rad/s (used only if USE_UART_CMD=False)
 
-# Rates
-CTRL_PERIOD_MS   = 50    # ~20 Hz control loop
-STATUS_PERIOD_MS = 200   # 5 Hz console status (only if DEBUG_PRINT)
-LED_PERIOD_MS    = 500   # 2 Hz blink
-TELEMETRY_MS     = 50    # 20 Hz telemetry
-CMD_KEEPALIVE_MS = 100   # refresh local cmd_vel (only if USE_UART_CMD=False)
+# Periods
+CTRL_PERIOD_MS   = 50     # ~20 Hz drive control loop
+STATUS_PERIOD_MS = 500    # 2 Hz console diagnostics
+LED_PERIOD_MS    = 500    # 2 Hz heartbeat
+TELEMETRY_MS     = 50     # 20 Hz UART telemetry
+CMD_KEEPALIVE_MS = 200    # Refresh local cmd_vel (only if USE_UART_CMD=False)
 
-# ================= hardware bring-up =================
-# Safety: keep the H-bridge disabled until we’re ready
-stby = Pin(config.MOTOR_STBY_PIN, Pin.OUT, value=0)
+# UART config (all from config.py)
+UART_ID        = config.UART_ID
+UART_BAUDRATE  = config.UART_BAUDRATE
+UART_TX_PIN    = config.UART_TX_PIN
+UART_RX_PIN    = config.UART_RX_PIN
 
-# Heartbeat LED (tries on-board alias, else config.LED_PIN)
+# Battery ADC (optional)
+BATTERY_ADC_PIN = getattr(config, "BATTERY_ADC_PIN", None)
+BATTERY_DIVIDER = getattr(config, "BATTERY_DIVIDER", 11.0)  # config override, else 11.0
+
+
+# ===================== hardware setup =====================
+
+# Heartbeat LED: try on-board "LED", else config.LED_PIN if defined.
 LED = None
 try:
     LED = Pin("LED", Pin.OUT)   # RP2040 boards
@@ -35,92 +55,157 @@ except Exception:
 if LED:
     LED.value(0)  # start OFF
 
-# Drive system bundle
-drive = DriveSystem(config)
-motor_left = drive.left_motor
-motor_right = drive.right_motor
-dd = drive.controller
+# Drive system bundle (motors, driver, encoders, diff-drive controller)
+drive = DriveSystem()
 
-# I2C & IMU (adjust pins if you wired differently)
-# If you already keep I2C pins in config, swap Pin(5)/Pin(4) for those.
+# Optional IMU (not used yet in this loop, but wired for future use)
 imu = None
-
-
 try:
-    i2c = I2C(config.I2C_ID, scl=Pin(config.I2C_SCL_PIN), sda=Pin(config.I2C_SDA_PIN), freq=config.I2C_FREQ)
+    i2c = I2C(
+        config.I2C_ID,
+        scl=Pin(config.I2C_SCL_PIN),
+        sda=Pin(config.I2C_SDA_PIN),
+        freq=config.I2C_FREQ,
+    )
     imu = MPU6050(i2c)
     imu.wake()
-except Exception as _e:
-    imu = None  # run fine without IMU
+except Exception as e:
+    imu = None
+    if DEBUG_PRINT:
+        print("IMU init failed or not present:", e)
 
-# UART link to the Pi 5 (uses config.BATTERY_ADC_PIN for battery via divider)
+# UART link to the Pi 5 (controller is the DriveSystem)
 tele = PicoLowLevelLink(
-    controller=dd,
-    uart_id=config.UART_ID,
-    baud=config.UART_BAUDRATE,
-    tx_pin=config.UART_TX_PIN,
-    rx_pin=config.UART_RX_PIN,
-    battery_adc_pin=getattr(config, "BATTERY_ADC_PIN", None),
-    estop_manager=None,
-    debug=TELEMETRY_DEBUG_FRAME,
+    controller=drive,
+    uart_id=UART_ID,
+    baud=UART_BAUDRATE,
+    tx_pin=UART_TX_PIN,
+    rx_pin=UART_RX_PIN,
+    battery_adc_pin=BATTERY_ADC_PIN,
+    estop_manager=None,             # plug in later if install have one
+    debug=False,                    # set True for verbose UART debug
+    fb_period_ms=TELEMETRY_MS,
+    batt_period_ms=200,
+    ll_period_ms=200,
+    adc_divider_ratio=BATTERY_DIVIDER,
 )
 
-# ================= helpers =================
-def print_status(now_ms):
-    ddr = dd.get_diagnostics()
-    spL = ddr["target_rpm"]["left"]; spR = ddr["target_rpm"]["right"]
-    measL = motor_left.encoder.update_rpm()
-    measR = motor_right.encoder.update_rpm()
-    errL_live = spL - measL; errR_live = spR - measR
-    L = motor_left.get_diagnostics(); R = motor_right.get_diagnostics()
-    MIN_DUTY = config.MIN_DUTY; MAX_DUTY = config.MAX_DUTY
-    last_out_L = float(L["last_output"]); last_out_R = float(R["last_output"])
-    satL = (last_out_L <= MIN_DUTY + 1) or (last_out_L >= MAX_DUTY - 1)
-    satR = (last_out_R <= MIN_DUTY + 1) or (last_out_R >= MAX_DUTY - 1)
-    print(
-        "t={:>7} | v={:.2f} w={:.2f} | spRPM L:{:.2f} R:{:.2f} | rpm L:{:.2f} R:{:.2f} | "
-        "err L:{:.2f} R:{:.2f} | duty L:{:.0f} R:{:.0f} | sat L:{} R:{} | loop={}us timeout={}".format(
-            now_ms,
-            ddr["cmd"]["linear_mps"], ddr["cmd"]["angular_rps"],
-            spL, spR, measL, measR, errL_live, errR_live,
-            last_out_L, last_out_R, satL, satR,
-            ddr["loop_time_us"], ddr["timeout"]
-        )
-    )
 
-# ================= main loop =================
+# ===================== diagnostics helper =====================
+
+def print_diagnostics(now_ms: int) -> None:
+    """
+    Print a compact but useful diagnostics snapshot.
+
+    This is aimed at first-run troubleshooting in Thonny:
+        - commanded vs measured body velocities
+        - left/right target RPM vs measured RPM
+        - left/right PID duty and saturation
+        - basic encoder info (ticks)
+        - drive loop timing and timeout flag
+    """
+    dd = drive.controller.get_diagnostics()
+    fb = drive.controller.get_drive_feedback()
+
+    left = drive.left_motor.get_diagnostics()
+    right = drive.right_motor.get_diagnostics()
+
+    left_enc = drive.left_encoder
+    right_enc = drive.right_encoder
+
+    # Basic body command and measured velocities
+    cmd_lin = dd["cmd"]["linear_mps"]
+    cmd_ang = dd["cmd"]["angular_rps"]
+    meas_lin = dd["body"]["linear_mps"]
+    meas_ang = dd["body"]["angular_rps"]
+
+    # Targets
+    spL = dd["target_rpm"]["left"]
+    spR = dd["target_rpm"]["right"]
+
+    # Measured RPM from encoders
+    measL = left_enc.rpm if hasattr(left_enc, "rpm") else 0.0
+    measR = right_enc.rpm if hasattr(right_enc, "rpm") else 0.0
+
+    errL = spL - measL
+    errR = spR - measR
+
+    # PID duty & saturation
+    MIN_DUTY = getattr(config, "MIN_DUTY", 0)
+    MAX_DUTY = getattr(config, "MAX_DUTY", 65535)
+
+    dutyL = float(left["last_output"])
+    dutyR = float(right["last_output"])
+
+    satL = (dutyL <= MIN_DUTY + 1) or (dutyL >= MAX_DUTY - 1)
+    satR = (dutyR <= MIN_DUTY + 1) or (dutyR >= MAX_DUTY - 1)
+
+    # Encoder ticks
+    ticksL = getattr(left_enc, "ticks", 0)
+    ticksR = getattr(right_enc, "ticks", 0)
+
+    loop_us = dd["loop_time_us"]
+    timeout = dd["timeout"]
+
+    print("\n=== DRIVE DIAGNOSTICS @ t={} ms ===".format(now_ms))
+    print("  CMD   : v_cmd = {:.3f} m/s,  w_cmd = {:.3f} rad/s".format(cmd_lin, cmd_ang))
+    print("  MEAS  : v_meas = {:.3f} m/s, w_meas = {:.3f} rad/s".format(meas_lin, meas_ang))
+    print("  RPM   : SP L = {:7.2f},   SP R = {:7.2f}".format(spL, spR))
+    print("          MEAS L = {:7.2f}, MEAS R = {:7.2f}".format(measL, measR))
+    print("          ERR  L = {:7.2f}, ERR  R = {:7.2f}".format(errL, errR))
+    print("  DUTY  : L = {:7.0f} (sat={}), R = {:7.0f} (sat={})".format(dutyL, satL, dutyR, satR))
+    print("  TICKS : L = {:d}, R = {:d}".format(ticksL, ticksR))
+    print("  LOOP  : {} us, timeout = {}".format(loop_us, timeout))
+    print("  FB    : v_meas = {:.3f} m/s, omega_meas = {:.3f} rad/s".format(
+        fb["v_meas"], fb["omega_meas"]))
+    print("          left_rpm = {:.2f}, right_rpm = {:.2f}".format(
+        fb["left_rpm"], fb["right_rpm"]))
+    print("          status_flags = 0x{:08X}".format(fb["status_flags"]))
+    print("==========================================")
+
+# ===================== main loop =====================
+
 try:
-    stby.value(1)  # enable H-bridge when ready
+    # Enable driver
+    drive.driver.enable()
 
-    # seed local command if we're not using UART control
+    # Seed local command if we're not using UART control
     if not USE_UART_CMD:
-        dd.update_cmd_vel(LOCAL_V_CMD, LOCAL_W_CMD)
+        drive.set_cmd_vel(LOCAL_V_CMD, LOCAL_W_CMD)
 
-    next_ctrl   = ticks_add(ticks_ms(), CTRL_PERIOD_MS)
-    next_stat   = ticks_ms()
-    next_led    = ticks_add(ticks_ms(), LED_PERIOD_MS)
-    next_tele   = ticks_add(ticks_ms(), TELEMETRY_MS)
-    next_cmd    = ticks_add(ticks_ms(), CMD_KEEPALIVE_MS)
+    now = ticks_ms()
+    next_ctrl   = ticks_add(now, CTRL_PERIOD_MS)
+    next_stat   = ticks_add(now, STATUS_PERIOD_MS)
+    next_led    = ticks_add(now, LED_PERIOD_MS)
+    next_tele   = ticks_add(now, TELEMETRY_MS)
+    next_cmd    = ticks_add(now, CMD_KEEPALIVE_MS)
     led_state   = 0
 
     if DEBUG_PRINT:
-        print("Running… CTRL={}ms STATUS={}ms TELE={}ms UART@115200".format(
-            CTRL_PERIOD_MS, STATUS_PERIOD_MS, TELEMETRY_MS))
+        print("Robot main loop starting.")
+        print("  CTRL_PERIOD_MS   =", CTRL_PERIOD_MS)
+        print("  STATUS_PERIOD_MS =", STATUS_PERIOD_MS)
+        print("  TELEMETRY_MS     =", TELEMETRY_MS)
+        print("  UART baud        =", UART_BAUDRATE)
+        print("  USE_UART_CMD     =", USE_UART_CMD)
 
     while True:
-        # 1) Control
-        dd.update_motors()
-
-        # 2) UART cmd_vel (host -> Pico)
-        tele.poll_cmd()  # parses proto frames framed with 0xAA55
-
-        # 3) Keep-alive if we're driving locally instead of UART
         now = ticks_ms()
+
+        # 1) Primary drive control loop
+        if ticks_diff(now, next_ctrl) >= 0:
+            drive.update()
+            next_ctrl = ticks_add(next_ctrl, CTRL_PERIOD_MS)
+
+        # 2) Incoming UART commands from Pi (cmd_vel / estop)
+        tele.poll_cmd()
+
+        # 3) Keep-alive for local command mode
         if not USE_UART_CMD and ticks_diff(now, next_cmd) >= 0:
-            dd.update_cmd_vel(LOCAL_V_CMD, LOCAL_W_CMD)
+            drive.set_cmd_vel(LOCAL_V_CMD, LOCAL_W_CMD)
             next_cmd = ticks_add(next_cmd, CMD_KEEPALIVE_MS)
 
-        # 4) Telemetry (Pico -> host)
+        # 4) Outgoing telemetry to Pi
         if ticks_diff(now, next_tele) >= 0:
             tele.send()
             next_tele = ticks_add(next_tele, TELEMETRY_MS)
@@ -131,28 +216,26 @@ try:
             LED.value(led_state)
             next_led = ticks_add(next_led, LED_PERIOD_MS)
 
-        # 6) Optional console diagnostics
+        # 6) Console diagnostics
         if DEBUG_PRINT and ticks_diff(now, next_stat) >= 0:
+            print_diagnostics(now)
             next_stat = ticks_add(next_stat, STATUS_PERIOD_MS)
-            print_status(now)
-            # in your main loop, every 1000 ms:
-            ddr = dd.get_diagnostics()
-            print("Pico cmd:", ddr["cmd"])  # shows linear_mps, angular_rps
 
-        # 7) Pacing (wraparound-safe)
-        rem = ticks_diff(next_ctrl, now)
-        if rem > 0:
-            sleep_ms(rem)
-        else:
-            next_ctrl = now
-        next_ctrl = ticks_add(next_ctrl, CTRL_PERIOD_MS)
+        # 7) Small sleep to keep CPU usage reasonable
+        sleep_ms(1)
 
 except KeyboardInterrupt:
     pass
+
 finally:
-    dd.stop_motors()
-    stby.value(0)
+    # Safe shutdown
+    try:
+        drive.stop(brake=True)
+        drive.driver.disable()
+    except Exception:
+        pass
+
     if LED:
         LED.value(0)
-    print("Stopped safely.")
 
+    print("Stopped safely.")
