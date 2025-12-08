@@ -1,0 +1,19 @@
+Taranis Q X7 + FrSky XSR-SIM – Robot Control Setup (Current State)
+Hardware
+Radio: FrSky Taranis Q X7
+Simulator dongle: FrSky XSR-SIM (USB joystick)
+Q X7 – ROBOT Model Configuration
+Model
+Dedicated model name: ROBOT
+Used for: ground robot teleop via XSR-SIM
+Inputs
+I1: STR → Source: Rud (left stick, left/right) – steering
+I2: FWD → Source: Thr (left stick, up/down) – forward/back
+I3: AU1 → Source: Ele (right stick, up/down) – auxiliary 1
+I4: AU2 → Source: Ail (right stick, left/right) – auxiliary 2
+(All inputs assumed linear: no expo, no curves, weight = 100.)
+Mixes → Channels
+CH1 ← I1: STR → steering / angular velocity (ω)
+CH2 ← I2: FWD → forward/back / linear velocity (v)
+CH3 ← I3: AU1 → spare (AUX1)
+CH4 ← I4: AU2 → spare (AUX2)

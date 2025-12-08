@@ -21,8 +21,8 @@ from MPU6050 import MPU6050
 # ===================== configuration knobs =====================
 
 DEBUG_PRINT            = True    # Console diagnostics on/off
-USE_UART_CMD           = True    # True = listen to Pi's cmd_vel; False = local test command
-LOCAL_V_CMD            = 0.50    # m/s (used only if USE_UART_CMD=False)
+USE_UART_CMD           = False    # True = listen to Pi's cmd_vel; False = local test command
+LOCAL_V_CMD            = 0.20    # m/s (used only if USE_UART_CMD=False)
 LOCAL_W_CMD            = 0.00    # rad/s (used only if USE_UART_CMD=False)
 
 # Periods
@@ -82,11 +82,9 @@ tele = PicoLowLevelLink(
     tx_pin=UART_TX_PIN,
     rx_pin=UART_RX_PIN,
     battery_adc_pin=BATTERY_ADC_PIN,
-    estop_manager=None,             # plug in later if install have one
     debug=False,                    # set True for verbose UART debug
     fb_period_ms=TELEMETRY_MS,
     batt_period_ms=200,
-    ll_period_ms=200,
     adc_divider_ratio=BATTERY_DIVIDER,
 )
 
@@ -198,7 +196,12 @@ try:
             next_ctrl = ticks_add(next_ctrl, CTRL_PERIOD_MS)
 
         # 2) Incoming UART commands from Pi (cmd_vel / estop)
-        tele.poll_cmd()
+        try:
+            tele.poll_cmd()      # or pico_uart_comm.poll_cmd()
+        except Exception as e:
+            print("UART error in poll_cmd:", e)
+            # maybe clear RX buffer or increment an error counter instead of dying
+
 
         # 3) Keep-alive for local command mode
         if not USE_UART_CMD and ticks_diff(now, next_cmd) >= 0:
@@ -239,3 +242,4 @@ finally:
         LED.value(0)
 
     print("Stopped safely.")
+
