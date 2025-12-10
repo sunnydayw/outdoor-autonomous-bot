@@ -4,3 +4,5 @@ websockets
 aiofiles
 opencv-python-headless
 psutil
+pydantic
+pyserial

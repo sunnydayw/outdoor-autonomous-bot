@@ -1,18 +1,23 @@
 // teleop.js
+
 // === CONFIG SECTION ===
-// Set these to the axes you observed in debug.html.
-// Example: axis 1 = FWD (stick up/down), axis 0 = STR (stick left/right).
-const FWD_AXIS_INDEX = 1;
-const STR_AXIS_INDEX = 0;
+// Axes observed in debug.html
+const FWD_AXIS_INDEX = 1; // stick up/down
+const STR_AXIS_INDEX = 0; // stick left/right
 
 // Max speeds and deadzone
 const V_MAX    = 0.30;  // m/s (linear speed)
 const W_MAX    = 1.50;  // rad/s (angular speed)
 const DEADZONE = 0.05;  // used on STR, and as a tiny post-threshold cleanup on FWD
 
+// Teleop send rate (browser -> backend)
+const SEND_INTERVAL_MS = 5; // 20 Hz
+
 // === RUNTIME STATE ===
 let activeGamepad = null;
+let lastSendTime = 0;
 
+// UI elements
 const statusEl     = document.getElementById("status");
 const cfgFwdAxisEl = document.getElementById("cfg-fwd-axis");
 const cfgStrAxisEl = document.getElementById("cfg-str-axis");
@@ -30,6 +35,8 @@ function setStatus(text, cls) {
   statusEl.textContent = text;
   statusEl.className = cls;
 }
+
+// === GAMEPAD HANDLING ===
 
 window.addEventListener("gamepadconnected", (e) => {
   activeGamepad = e.gamepad;
@@ -62,6 +69,8 @@ function getGamepad() {
   return null;
 }
 
+// === MAPPING FUNCTIONS ===
+
 // Deadzone for symmetric axes (STR)
 function applyDeadzone(x) {
   const ax = Math.abs(x);
@@ -89,13 +98,43 @@ function mapFwd(raw) {
   return Math.min(Math.max(norm, 0.0), 1.0);
 }
 
+// === BACKEND COMMUNICATION ===
+
+function sendTeleopCommand(vCmd, wCmd) {
+  fetch("/cmd_vel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      v_cmd: vCmd,
+      w_cmd: wCmd,
+      timestamp_ms: Date.now(),
+      source: "web_teleop"
+    })
+  }).catch((err) => {
+    // Network errors only – backend 4xx/5xx still resolve the fetch promise
+    console.error("Failed to send /cmd_vel:", err);
+  });
+}
+
+// === MAIN LOOP ===
+
 function update() {
   const gp = getGamepad();
+
   if (!gp) {
     setStatus(
       "No gamepad detected. Plug in the FrSky XSR-SIM and move a stick or press a button.",
       "warn"
     );
+
+    // Clear UI values
+    rawFwdEl.textContent  = "0.00";
+    rawStrEl.textContent  = "0.00";
+    normFwdEl.textContent = "0.00";
+    normStrEl.textContent = "0.00";
+    vCmdEl.textContent    = "0.000";
+    wCmdEl.textContent    = "0.000";
+
     requestAnimationFrame(update);
     return;
   }
@@ -128,6 +167,13 @@ function update() {
   vCmdEl.textContent    = vCmd.toFixed(3);
   wCmdEl.textContent    = wCmd.toFixed(3);
 
+  // Fixed-rate send to backend (20 Hz)
+  const now = performance.now();
+  if (now - lastSendTime >= SEND_INTERVAL_MS) {
+    sendTeleopCommand(vCmd, wCmd);
+    lastSendTime = now;
+  }
+
   requestAnimationFrame(update);
 }
 
@@ -143,4 +189,5 @@ window.addEventListener("click", () => {
   }
 });
 
+// Kick off main loop
 update();
