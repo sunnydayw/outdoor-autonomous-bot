@@ -160,7 +160,7 @@ class PicoLowLevelLink:
         Build a framed UART packet:
 
             START1 START2 MSG_ID LEN_H LEN_L PAYLOAD... CHECKSUM
-        """
+        """3333
         length = len(payload)
         len_hi = (length >> 8) & 0xFF
         len_lo = length & 0xFF
@@ -186,9 +186,25 @@ class PicoLowLevelLink:
         """
         buf = self._rx_buf
 
-        # Hunt for start bytes
-        while len(buf) >= 2 and not (buf[0] == self.START1 and buf[1] == self.START2):
-            buf.pop(0)
+        if len(buf) < 2:
+            return None, None  # not enough data to find start bytes
+
+        # Hunt for start bytes (avoid pop/del which MicroPython's bytearray lacks)
+        start_idx = -1
+        for i in range(len(buf) - 1):
+            if buf[i] == self.START1 and buf[i + 1] == self.START2:
+                start_idx = i
+                break
+
+        # No start bytes found: keep last byte (could be START1), drop the rest
+        if start_idx == -1:
+            last_byte = buf[-1:]  # slice keeps bytearray type
+            buf[:] = last_byte
+            return None, None
+
+        # Discard any garbage before the start bytes
+        if start_idx > 0:
+            buf[:] = buf[start_idx:]
 
         # Need at least start + msg_id + length (5 bytes)
         if len(buf) < 5:
@@ -202,7 +218,7 @@ class PicoLowLevelLink:
             return None, None  # incomplete frame
 
         frame = buf[:total_len]
-        del buf[:total_len]
+        buf[:] = buf[total_len:]  # drop consumed bytes without using del/pop
 
         payload = frame[5:-1]
         chk = frame[-1]

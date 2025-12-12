@@ -63,3 +63,9 @@ dashboard/
 - Harden the API inputs: validate `v_cmd`/`w_cmd` ranges, optionally reject stale client timestamps, and return informative error responses on bad payloads.
 - Cover arbitration logic with tests: unit-test `CommandState` timeouts, mode switching (teleop vs auto), and idle fallback to guard against regressions.
 - Clean up unused code: either wire `mode_manager.py` into the flow or remove it to avoid confusion.
+
+
+
+#source .venv/bin/activate
+# python -m backend.main
+        port: str = "/dev/ttyAMA10",
