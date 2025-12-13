@@ -157,7 +157,8 @@ function update() {
   const normStr = applyDeadzone(rawStrAxis);
 
   const vCmd = normFwd * V_MAX;
-  const wCmd = normStr * W_MAX;
+  // Map stick left (negative STR axis) to positive ω (CCW).
+  const wCmd = -normStr * W_MAX;
 
   // Update UI
   rawFwdEl.textContent  = rawFwdAxis.toFixed(2);

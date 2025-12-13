@@ -102,5 +102,3 @@ distance_per_pulse    = WHEEL_CIRCUMFERENCE / TICKS_PER_REV
 
 
 
-
-

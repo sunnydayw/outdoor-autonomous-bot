@@ -20,7 +20,7 @@ from MPU6050 import MPU6050
 
 # ===================== configuration knobs =====================
 
-DEBUG_PRINT            = True    # Console diagnostics on/off
+DEBUG_PRINT            = False    # Console diagnostics on/off
 USE_UART_CMD           = True    # True = listen to Pi's cmd_vel; False = local test command
 LOCAL_V_CMD            = 0.20    # m/s (used only if USE_UART_CMD=False)
 LOCAL_W_CMD            = 0.00    # rad/s (used only if USE_UART_CMD=False)

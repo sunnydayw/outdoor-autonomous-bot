@@ -78,7 +78,8 @@
     <h2>Command Mapping (v, ω)</h2>
     <div class="small">
       Uses two axes to compute linear velocity v (m/s) and angular velocity ω (rad/s).<br />
-      FWD is clamped to ≥ 0 (no reverse): pushing forward → positive v, pulling back → v = 0.
+      FWD is clamped to ≥ 0 (no reverse): pushing forward → positive v, pulling back → v = 0.<br />
+      Positive ω turns left/CCW; stick left sends positive ω.
     </div>
 
     <table>
@@ -111,6 +112,7 @@
     </table>
   </div>
 
-  <script src="teleop.js"></script>
+  <!-- Cache-busted so JS changes take effect without hard reloads -->
+  <script src="teleop.js?v=2"></script>
 </body>
 </html>
