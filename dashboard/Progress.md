@@ -66,6 +66,6 @@ dashboard/
 
 
 
-#source .venv/bin/activate
-# python -m backend.main
+source .venv/bin/activate
+python -m backend.main
         port: str = "/dev/ttyAMA10",

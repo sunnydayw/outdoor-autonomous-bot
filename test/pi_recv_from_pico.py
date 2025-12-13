@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import serial, time
 
-PORT = "/dev/ttyAMA0"  # adjust to your Pi debug UART path
+PORT = "/dev/ttyAMA10"  # adjust to your Pi debug UART path
 BAUD = 115200
 START1, START2 = 0xAA, 0x55
 

@@ -14,14 +14,14 @@ from time import ticks_ms, ticks_diff, ticks_add, sleep_ms
 import config
 
 from drive_system import DriveSystem
-from pico_uart_comm import PicoLowLevelLink
+from pico_uart_comm import PicoVelocityReceiver
 from MPU6050 import MPU6050
 
 
 # ===================== configuration knobs =====================
 
 DEBUG_PRINT            = True    # Console diagnostics on/off
-USE_UART_CMD           = False    # True = listen to Pi's cmd_vel; False = local test command
+USE_UART_CMD           = True    # True = listen to Pi's cmd_vel; False = local test command
 LOCAL_V_CMD            = 0.20    # m/s (used only if USE_UART_CMD=False)
 LOCAL_W_CMD            = 0.00    # rad/s (used only if USE_UART_CMD=False)
 
@@ -29,7 +29,6 @@ LOCAL_W_CMD            = 0.00    # rad/s (used only if USE_UART_CMD=False)
 CTRL_PERIOD_MS   = 50     # ~20 Hz drive control loop
 STATUS_PERIOD_MS = 500    # 2 Hz console diagnostics
 LED_PERIOD_MS    = 500    # 2 Hz heartbeat
-TELEMETRY_MS     = 50     # 20 Hz UART telemetry
 CMD_KEEPALIVE_MS = 200    # Refresh local cmd_vel (only if USE_UART_CMD=False)
 
 # UART config (all from config.py)
@@ -37,11 +36,6 @@ UART_ID        = config.UART_ID
 UART_BAUDRATE  = config.UART_BAUDRATE
 UART_TX_PIN    = config.UART_TX_PIN
 UART_RX_PIN    = config.UART_RX_PIN
-
-# Battery ADC (optional)
-BATTERY_ADC_PIN = getattr(config, "BATTERY_ADC_PIN", None)
-BATTERY_DIVIDER = getattr(config, "BATTERY_DIVIDER", 11.0)  # config override, else 11.0
-
 
 # ===================== hardware setup =====================
 
@@ -75,17 +69,13 @@ except Exception as e:
         print("IMU init failed or not present:", e)
 
 # UART link to the Pi 5 (controller is the DriveSystem)
-tele = PicoLowLevelLink(
+uart_link = PicoVelocityReceiver(
     controller=drive,
     uart_id=UART_ID,
     baud=UART_BAUDRATE,
     tx_pin=UART_TX_PIN,
     rx_pin=UART_RX_PIN,
-    battery_adc_pin=BATTERY_ADC_PIN,
     debug=False,                    # set True for verbose UART debug
-    fb_period_ms=TELEMETRY_MS,
-    batt_period_ms=200,
-    adc_divider_ratio=BATTERY_DIVIDER,
 )
 
 
@@ -175,7 +165,6 @@ try:
     next_ctrl   = ticks_add(now, CTRL_PERIOD_MS)
     next_stat   = ticks_add(now, STATUS_PERIOD_MS)
     next_led    = ticks_add(now, LED_PERIOD_MS)
-    next_tele   = ticks_add(now, TELEMETRY_MS)
     next_cmd    = ticks_add(now, CMD_KEEPALIVE_MS)
     led_state   = 0
 
@@ -183,7 +172,6 @@ try:
         print("Robot main loop starting.")
         print("  CTRL_PERIOD_MS   =", CTRL_PERIOD_MS)
         print("  STATUS_PERIOD_MS =", STATUS_PERIOD_MS)
-        print("  TELEMETRY_MS     =", TELEMETRY_MS)
         print("  UART baud        =", UART_BAUDRATE)
         print("  USE_UART_CMD     =", USE_UART_CMD)
 
@@ -195,36 +183,31 @@ try:
             drive.update()
             next_ctrl = ticks_add(next_ctrl, CTRL_PERIOD_MS)
 
-        # 2) Incoming UART commands from Pi (cmd_vel / estop)
-        try:
-            tele.poll_cmd()      # or pico_uart_comm.poll_cmd()
-        except Exception as e:
-            print("UART error in poll_cmd:", e)
-            # maybe clear RX buffer or increment an error counter instead of dying
+        # 2) Incoming UART commands from Pi
+        if USE_UART_CMD:
+            try:
+                uart_link.poll()
+            except Exception as e:
+                print("UART error in poll():", e)
+                # optionally clear buffer or count errors instead of stopping
+        else:
+            # Keep-alive for local command mode
+            if ticks_diff(now, next_cmd) >= 0:
+                drive.set_cmd_vel(LOCAL_V_CMD, LOCAL_W_CMD)
+                next_cmd = ticks_add(next_cmd, CMD_KEEPALIVE_MS)
 
-
-        # 3) Keep-alive for local command mode
-        if not USE_UART_CMD and ticks_diff(now, next_cmd) >= 0:
-            drive.set_cmd_vel(LOCAL_V_CMD, LOCAL_W_CMD)
-            next_cmd = ticks_add(next_cmd, CMD_KEEPALIVE_MS)
-
-        # 4) Outgoing telemetry to Pi
-        if ticks_diff(now, next_tele) >= 0:
-            tele.send()
-            next_tele = ticks_add(next_tele, TELEMETRY_MS)
-
-        # 5) Heartbeat LED
+        # 3) Heartbeat LED
         if LED and ticks_diff(now, next_led) >= 0:
             led_state ^= 1
             LED.value(led_state)
             next_led = ticks_add(next_led, LED_PERIOD_MS)
 
-        # 6) Console diagnostics
+        # 4) Console diagnostics
         if DEBUG_PRINT and ticks_diff(now, next_stat) >= 0:
             print_diagnostics(now)
             next_stat = ticks_add(next_stat, STATUS_PERIOD_MS)
 
-        # 7) Small sleep to keep CPU usage reasonable
+        # 5) Small sleep to keep CPU usage reasonable
         sleep_ms(1)
 
 except KeyboardInterrupt:
@@ -242,4 +225,3 @@ finally:
         LED.value(0)
 
     print("Stopped safely.")
-
