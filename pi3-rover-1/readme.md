@@ -2,6 +2,7 @@ After Installed Ubuntu Server 24.04.3 LTS (64-Bits) with Raspberry Pi Imager
 
 Ssh to the pi3-rover-1.local and 
 - sudo apt update
+- sudo apt install python3-pip
 - install the requirements.txt
 
 For the development workflow, i will have a monorepo and portion of the code is need to push to the pi for testing, plan is to use git subtree to push a subfolder to the Pi.
@@ -16,9 +17,6 @@ git init --bare pi3-rover-1.git # pi3-rover-1 is the folder name in the repo
 
 Create a working tree where code will be checked out:
 mkdir -p /home/sunnyday/apps/pi3-rover-1
-
-cd ~/deploy/pi3-rover-1.git/hooks
-nano post-receive
 
 Add the server-side hook:
     cat > /home/sunnyday/deploy/pi3-rover-1.git/hooks/post-receive <<'EOF'
