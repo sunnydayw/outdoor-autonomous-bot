@@ -25,20 +25,24 @@ Add the server-side hook:
     #!/usr/bin/env bash
     set -euo pipefail
 
+    LOG=/home/sunnyday/deploy/pi3-rover-1-deploy.log
+    exec >>"$LOG" 2>&1
+
     WORKTREE=/home/sunnyday/apps/pi3-rover-1
     GIT_DIR=/home/sunnyday/deploy/pi3-rover-1.git
 
-    git --work-tree="$WORKTREE" --git-dir="$GIT_DIR" checkout -f
+    mkdir -p "$WORKTREE"
 
-    # Optional: run build/restart here
-    # cd "$WORKTREE"
-    # ./build.sh
-    # sudo systemctl restart pi3-rover-1.service
+    # Read what was pushed; deploy only when main is updated
+    while read -r old new ref; do
+    if [[ "$ref" == "refs/heads/main" ]]; then
+        git --work-tree="$WORKTREE" --git-dir="$GIT_DIR" checkout -f main
+    fi
+    done
     EOF
 
     chmod +x /home/sunnyday/deploy/pi3-rover-1.git/hooks/post-receive
 
-chmod +x post-receive
 
 # On Mac, add the Pi remote:
 git remote add pi sunnyday@pi3-rover-1.local:/home/sunnyday/deploy/pi3-rover-1.git
