@@ -2,7 +2,7 @@ After Installed Ubuntu Server 24.04.3 LTS (64-Bits) with Raspberry Pi Imager
 
 Ssh to the pi3-rover-1.local and 
 - sudo apt update
-- sudo apt install python3-pip
+- sudo apt install -y python3-venv python3-pip
 - install the requirements.txt
 
 For the development workflow, i will have a monorepo and portion of the code is need to push to the pi for testing, plan is to use git subtree to push a subfolder to the Pi.
@@ -48,3 +48,15 @@ git remote add pi sunnyday@pi3-rover-1.local:/home/sunnyday/deploy/pi3-rover-1.g
 Push only the subfolder pi3-rover-1/:
 git subtree push --prefix pi3-rover-1 pi main
 
+
+# prep and get dashboard ready
+cd ~/apps/pi3-rover-1/dashboard
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+
+# To run dashbaord
+cd ~/apps/pi3-rover-1/dashboard
+source .venv/bin/activate
+python -m backend.main
