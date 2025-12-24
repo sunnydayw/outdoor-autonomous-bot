@@ -1,6 +1,7 @@
 After Installed Ubuntu Server 24.04.3 LTS (64-Bits) with Raspberry Pi Imager
 
 Ssh to the pi3-rover-1.local and 
+ssh pi3-rover-1.local
 - sudo apt update
 - sudo apt install -y python3-venv python3-pip
 - install the requirements.txt
@@ -45,7 +46,7 @@ Add the server-side hook:
 # On Mac, add the Pi remote:
 git remote add pi sunnyday@pi3-rover-1.local:/home/sunnyday/deploy/pi3-rover-1.git
 
-Push only the subfolder pi3-rover-1/:
+# To Push only the subfolder pi3-rover-1/:
 git subtree push --prefix pi3-rover-1 pi main
 
 
@@ -60,3 +61,24 @@ pip install -r requirements.txt
 cd ~/apps/pi3-rover-1/dashboard
 source .venv/bin/activate
 python -m backend.main
+
+
+# UART config
+
+sudo nano /boot/firmware/config.txt
+dtoverlay=disable-bt
+enable_uart=1
+
+sudo systemctl disable hciuart
+sudo reboot
+
+sudo nano /boot/firmware/cmdline.txt
+remove console=serial10,115200
+
+sudo systemctl disable --now serial-getty@serial0.service
+sudo systemctl disable --now hciuart.service 2>/dev/null || true
+
+sudo reboot
+check after reboot 
+readlink -f /dev/serial0
+ls -l /dev/serial0

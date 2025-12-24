@@ -35,7 +35,7 @@ class PiUartBridge:
 
     def __init__(
         self,
-        port: str = "/dev/ttyAMA10",
+        port: str = "/dev/ttyAMA0",
         baud: int = 115_200,
         heartbeat_s: float = 0.05,
         reconnect_interval_s: float = 1.0,
@@ -137,7 +137,7 @@ class PiUartBridge:
 def control_loop(
     cmd_state: CommandState,
     period_s: float = 0.02,
-    port: str = "/dev/ttyAMA10",
+    port: str = "/dev/ttyAMA0",
     baud: int = 115_200,
     heartbeat_s: float = 0.05,
     reconnect_interval_s: float = 1.0,
