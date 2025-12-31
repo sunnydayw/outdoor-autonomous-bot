@@ -28,6 +28,20 @@ const normStrEl    = document.getElementById("norm-str");
 const vCmdEl       = document.getElementById("v-cmd");
 const wCmdEl       = document.getElementById("w-cmd");
 
+// Telemetry UI elements
+const leftTargetRpmEl = document.getElementById("left-target-rpm");
+const rightTargetRpmEl = document.getElementById("right-target-rpm");
+const leftActualRpmEl = document.getElementById("left-actual-rpm");
+const rightActualRpmEl = document.getElementById("right-actual-rpm");
+const batteryVoltageEl = document.getElementById("battery-voltage");
+const telemetryStatusEl = document.getElementById("telemetry-status");
+const accelXEl = document.getElementById("accel-x");
+const accelYEl = document.getElementById("accel-y");
+const accelZEl = document.getElementById("accel-z");
+const gyroXEl = document.getElementById("gyro-x");
+const gyroYEl = document.getElementById("gyro-y");
+const gyroZEl = document.getElementById("gyro-z");
+
 cfgFwdAxisEl.textContent = FWD_AXIS_INDEX;
 cfgStrAxisEl.textContent = STR_AXIS_INDEX;
 
@@ -116,6 +130,77 @@ function sendTeleopCommand(vCmd, wCmd) {
   });
 }
 
+// === WEBSOCKET FOR TELEMETRY ===
+
+let telemetryWs = null;
+
+function connectTelemetryWebSocket() {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const wsUrl = `${protocol}//${window.location.host}/ws/telemetry`;
+
+  telemetryWs = new WebSocket(wsUrl);
+
+  telemetryWs.onopen = () => {
+    console.log("Telemetry WebSocket connected");
+    telemetryStatusEl.textContent = "Connected";
+    telemetryStatusEl.style.color = "#4ade80"; // green
+  };
+
+  telemetryWs.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      updateTelemetryUI(data);
+    } catch (err) {
+      console.error("Failed to parse telemetry:", err);
+    }
+  };
+
+  telemetryWs.onclose = () => {
+    console.log("Telemetry WebSocket disconnected");
+    telemetryStatusEl.textContent = "Disconnected";
+    telemetryStatusEl.style.color = "#f97373"; // red
+    // Reconnect after a delay
+    setTimeout(connectTelemetryWebSocket, 1000);
+  };
+
+  telemetryWs.onerror = (err) => {
+    console.error("Telemetry WebSocket error:", err);
+  };
+}
+
+function updateTelemetryUI(data) {
+  if (data.valid) {
+    leftTargetRpmEl.textContent = data.left_target_rpm.toFixed(1);
+    rightTargetRpmEl.textContent = data.right_target_rpm.toFixed(1);
+    leftActualRpmEl.textContent = data.left_actual_rpm.toFixed(1);
+    rightActualRpmEl.textContent = data.right_actual_rpm.toFixed(1);
+    batteryVoltageEl.textContent = data.battery_voltage.toFixed(2);
+    accelXEl.textContent = data.accel_x.toFixed(2);
+    accelYEl.textContent = data.accel_y.toFixed(2);
+    accelZEl.textContent = data.accel_z.toFixed(2);
+    gyroXEl.textContent = data.gyro_x.toFixed(2);
+    gyroYEl.textContent = data.gyro_y.toFixed(2);
+    gyroZEl.textContent = data.gyro_z.toFixed(2);
+    telemetryStatusEl.textContent = `Valid (${data.age_s.toFixed(1)}s ago)`;
+    telemetryStatusEl.style.color = "#4ade80"; // green
+  } else {
+    // Clear values if invalid
+    leftTargetRpmEl.textContent = "–";
+    rightTargetRpmEl.textContent = "–";
+    leftActualRpmEl.textContent = "–";
+    rightActualRpmEl.textContent = "–";
+    batteryVoltageEl.textContent = "–";
+    accelXEl.textContent = "–";
+    accelYEl.textContent = "–";
+    accelZEl.textContent = "–";
+    gyroXEl.textContent = "–";
+    gyroYEl.textContent = "–";
+    gyroZEl.textContent = "–";
+    telemetryStatusEl.textContent = "No data";
+    telemetryStatusEl.style.color = "#facc15"; // yellow
+  }
+}
+
 // === MAIN LOOP ===
 
 function update() {
@@ -192,3 +277,6 @@ window.addEventListener("click", () => {
 
 // Kick off main loop
 update();
+
+// Connect to telemetry WebSocket
+connectTelemetryWebSocket();

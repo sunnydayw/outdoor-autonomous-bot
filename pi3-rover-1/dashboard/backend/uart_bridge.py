@@ -32,6 +32,9 @@ class PiUartBridge:
     MSG_ID_VELOCITY = 0x01
     PAYLOAD_FMT = "!ff"
     PAYLOAD_LEN = struct.calcsize(PAYLOAD_FMT)
+    MSG_ID_TELEMETRY = 0x02
+    TELEMETRY_FMT = "!fffffffffff"
+    TELEMETRY_LEN = struct.calcsize(TELEMETRY_FMT)
 
     def __init__(
         self,
@@ -78,6 +81,9 @@ class PiUartBridge:
 
         if should_send:
             self._send_velocity(ser, v_cmd, w_cmd)
+
+        # Try to read incoming telemetry
+        self._read_telemetry(ser, cmd_state)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -132,6 +138,60 @@ class PiUartBridge:
                 ser.close()
             finally:
                 self._ser = None
+
+    def _read_telemetry(self, ser: serial.Serial, cmd_state: CommandState) -> None:
+        """
+        Non-blocking read for telemetry frames from Pico.
+        """
+        try:
+            # Check if there's data available
+            if ser.in_waiting < 7:  # Minimum frame size: START1 START2 MSG_ID LEN_H LEN_L PAYLOAD_MIN CHECKSUM
+                return
+
+            # Read header
+            header = ser.read(5)
+            if len(header) != 5:
+                return
+
+            start1, start2, msg_id, len_hi, len_lo = header
+            if start1 != self.START1 or start2 != self.START2:
+                logger.warning("Invalid frame start bytes: %02x %02x", start1, start2)
+                return
+
+            length = (len_hi << 8) | len_lo
+            if length != self.TELEMETRY_LEN:
+                logger.warning("Unexpected telemetry payload length: %d", length)
+                return
+
+            # Read payload and checksum
+            payload_and_chk = ser.read(length + 1)
+            if len(payload_and_chk) != length + 1:
+                logger.warning("Incomplete telemetry frame")
+                return
+
+            payload = payload_and_chk[:-1]
+            chk = payload_and_chk[-1]
+
+            # Verify checksum
+            expected_chk = self._calc_checksum(msg_id, length, payload)
+            if chk != expected_chk:
+                logger.warning("Telemetry checksum mismatch: got %02x, expected %02x", chk, expected_chk)
+                return
+
+            # Unpack telemetry
+            if msg_id == self.MSG_ID_TELEMETRY:
+                telemetry = struct.unpack(self.TELEMETRY_FMT, payload)
+                cmd_state.update_telemetry(*telemetry)
+                logger.debug("Received telemetry: %s", telemetry)
+
+        except SerialException as exc:
+            logger.warning("UART read failed (%s); closing serial", exc)
+            try:
+                ser.close()
+            finally:
+                self._ser = None
+        except struct.error as exc:
+            logger.warning("Telemetry unpack failed (%s)", exc)
 
 
 def control_loop(

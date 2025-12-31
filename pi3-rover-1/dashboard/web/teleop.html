@@ -112,6 +112,54 @@
     </table>
   </div>
 
+  <div class="card">
+    <h2>Telemetry from Pico</h2>
+    <div class="small">
+      Real-time data from the robot: wheel RPMs, battery voltage, IMU readings.
+    </div>
+
+    <table>
+      <tbody>
+        <tr>
+          <th>Left Target RPM</th>
+          <td class="mono" id="left-target-rpm">–</td>
+          <th>Right Target RPM</th>
+          <td class="mono" id="right-target-rpm">–</td>
+        </tr>
+        <tr>
+          <th>Left Actual RPM</th>
+          <td class="mono" id="left-actual-rpm">–</td>
+          <th>Right Actual RPM</th>
+          <td class="mono" id="right-actual-rpm">–</td>
+        </tr>
+        <tr>
+          <th>Battery Voltage</th>
+          <td class="mono" id="battery-voltage">–</td>
+          <th>Status</th>
+          <td class="mono" id="telemetry-status">No data</td>
+        </tr>
+        <tr>
+          <th>Accel X (g)</th>
+          <td class="mono" id="accel-x">–</td>
+          <th>Accel Y (g)</th>
+          <td class="mono" id="accel-y">–</td>
+        </tr>
+        <tr>
+          <th>Accel Z (g)</th>
+          <td class="mono" id="accel-z">–</td>
+          <th>Gyro X (deg/s)</th>
+          <td class="mono" id="gyro-x">–</td>
+        </tr>
+        <tr>
+          <th>Gyro Y (deg/s)</th>
+          <td class="mono" id="gyro-y">–</td>
+          <th>Gyro Z (deg/s)</th>
+          <td class="mono" id="gyro-z">–</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
   <!-- Cache-busted so JS changes take effect without hard reloads -->
   <script src="teleop.js?v=2"></script>
 </body>

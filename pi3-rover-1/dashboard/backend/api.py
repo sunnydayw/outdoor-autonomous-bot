@@ -4,9 +4,13 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
+from fastapi import WebSocket
 from pydantic import BaseModel, Field
 from pathlib import Path
 import time
+import json
+import asyncio
+import logging
 from .command_state import CommandState, ControlMode
 
 app = FastAPI(title="Robot Teleop Backend")
@@ -16,6 +20,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 WEB_DIR = BASE_DIR / "web"
 # Resolve static directory relative to this file so uvicorn works regardless of CWD.
 app.mount("/static", StaticFiles(directory=WEB_DIR, html=True), name="static")
+
+logger = logging.getLogger(__name__)
 
 @app.get("/", include_in_schema=False)
 async def root():
@@ -65,6 +71,23 @@ class CurrentCommandResponse(BaseModel):
     v_cmd: float
     w_cmd: float
     mode: ControlMode
+    server_time_ms: int
+
+
+class TelemetryResponse(BaseModel):
+    left_target_rpm: float
+    right_target_rpm: float
+    left_actual_rpm: float
+    right_actual_rpm: float
+    battery_voltage: float
+    accel_x: float
+    accel_y: float
+    accel_z: float
+    gyro_x: float
+    gyro_y: float
+    gyro_z: float
+    age_s: float
+    valid: bool
     server_time_ms: int
 
 
@@ -124,3 +147,55 @@ async def get_current_command():
         mode=mode,
         server_time_ms=int(time.time() * 1000),
     )
+
+
+@app.get("/telemetry", response_model=TelemetryResponse)
+async def get_telemetry():
+    """
+    Latest telemetry data from Pico.
+    """
+    snap = command_state.get_telemetry_snapshot()
+    return TelemetryResponse(
+        left_target_rpm=snap["left_target_rpm"],
+        right_target_rpm=snap["right_target_rpm"],
+        left_actual_rpm=snap["left_actual_rpm"],
+        right_actual_rpm=snap["right_actual_rpm"],
+        battery_voltage=snap["battery_voltage"],
+        accel_x=snap["accel_x"],
+        accel_y=snap["accel_y"],
+        accel_z=snap["accel_z"],
+        gyro_x=snap["gyro_x"],
+        gyro_y=snap["gyro_y"],
+        gyro_z=snap["gyro_z"],
+        age_s=snap["age_s"],
+        valid=snap["valid"],
+        server_time_ms=int(time.time() * 1000),
+    )
+
+
+@app.websocket("/ws/telemetry")
+async def websocket_telemetry(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time telemetry updates.
+    """
+    await websocket.accept()
+    try:
+        # Send initial telemetry
+        snap = command_state.get_telemetry_snapshot()
+        await websocket.send_json(snap)
+
+        last_update = snap["age_s"] if snap["valid"] else float('inf')
+
+        while True:
+            # Check for new telemetry
+            current_snap = command_state.get_telemetry_snapshot()
+            if current_snap["valid"] and current_snap["age_s"] < last_update:
+                await websocket.send_json(current_snap)
+                last_update = current_snap["age_s"]
+
+            # Small delay to avoid busy loop
+            await asyncio.sleep(0.1)
+    except Exception as e:
+        logger.error("WebSocket error: %s", e)
+    finally:
+        await websocket.close()

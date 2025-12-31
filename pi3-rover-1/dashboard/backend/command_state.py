@@ -15,6 +15,26 @@ class ControlMode(str, Enum):
 
 
 @dataclass
+class TelemetryData:
+    """
+    Incoming telemetry from Pico.
+    """
+    left_target_rpm: float = 0.0
+    right_target_rpm: float = 0.0
+    left_actual_rpm: float = 0.0
+    right_actual_rpm: float = 0.0
+    battery_voltage: float = 0.0
+    accel_x: float = 0.0
+    accel_y: float = 0.0
+    accel_z: float = 0.0
+    gyro_x: float = 0.0
+    gyro_y: float = 0.0
+    gyro_z: float = 0.0
+    last_update_ts: float = 0.0
+    valid: bool = False  # True if we have received valid telemetry
+
+
+@dataclass
 class SourceState:
     """
     Per-source command state (teleop, auto, etc.).
@@ -45,6 +65,9 @@ class CommandState:
     teleop_timeout: float = 0.5   # if no teleop cmd in 0.5s → teleop inactive
     auto_timeout: float   = 1.0   # auto planner can be slightly slower
 
+    # Incoming telemetry from Pico
+    telemetry: TelemetryData = field(default_factory=TelemetryData)
+
     # Internal lock for thread/async safety
     _lock: RLock = field(default_factory=RLock, init=False, repr=False)
 
@@ -73,6 +96,39 @@ class CommandState:
             self.auto.last_update_ts = now
             self.auto.active = True
             self._recompute_mode_locked(now)
+
+    def update_telemetry(
+        self,
+        left_target_rpm: float,
+        right_target_rpm: float,
+        left_actual_rpm: float,
+        right_actual_rpm: float,
+        battery_voltage: float,
+        accel_x: float,
+        accel_y: float,
+        accel_z: float,
+        gyro_x: float,
+        gyro_y: float,
+        gyro_z: float,
+    ) -> None:
+        """
+        Update telemetry data from Pico.
+        """
+        now = time.monotonic()
+        with self._lock:
+            self.telemetry.left_target_rpm = left_target_rpm
+            self.telemetry.right_target_rpm = right_target_rpm
+            self.telemetry.left_actual_rpm = left_actual_rpm
+            self.telemetry.right_actual_rpm = right_actual_rpm
+            self.telemetry.battery_voltage = battery_voltage
+            self.telemetry.accel_x = accel_x
+            self.telemetry.accel_y = accel_y
+            self.telemetry.accel_z = accel_z
+            self.telemetry.gyro_x = gyro_x
+            self.telemetry.gyro_y = gyro_y
+            self.telemetry.gyro_z = gyro_z
+            self.telemetry.last_update_ts = now
+            self.telemetry.valid = True
 
     # ---------- Query APIs (called by UART loop / status endpoints) ----------
 
@@ -117,6 +173,28 @@ class CommandState:
                     "active": self.auto.active,
                     "age_s": now - self.auto.last_update_ts,
                 },
+            }
+
+    def get_telemetry_snapshot(self) -> dict:
+        """
+        Snapshot of latest telemetry data.
+        """
+        now = time.monotonic()
+        with self._lock:
+            return {
+                "left_target_rpm": self.telemetry.left_target_rpm,
+                "right_target_rpm": self.telemetry.right_target_rpm,
+                "left_actual_rpm": self.telemetry.left_actual_rpm,
+                "right_actual_rpm": self.telemetry.right_actual_rpm,
+                "battery_voltage": self.telemetry.battery_voltage,
+                "accel_x": self.telemetry.accel_x,
+                "accel_y": self.telemetry.accel_y,
+                "accel_z": self.telemetry.accel_z,
+                "gyro_x": self.telemetry.gyro_x,
+                "gyro_y": self.telemetry.gyro_y,
+                "gyro_z": self.telemetry.gyro_z,
+                "age_s": now - self.telemetry.last_update_ts,
+                "valid": self.telemetry.valid,
             }
 
     # ---------- Internal helpers ----------
