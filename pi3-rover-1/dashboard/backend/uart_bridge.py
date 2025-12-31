@@ -56,6 +56,7 @@ class PiUartBridge:
         self._next_reconnect_ts: float = 0.0
         self._last_send_ts: float = 0.0
         self._last_sent: Optional[Tuple[float, float]] = None
+        self._rx_buf = bytearray()
 
     def step(self, cmd_state: CommandState) -> None:
         """
@@ -82,8 +83,9 @@ class PiUartBridge:
         if should_send:
             self._send_velocity(ser, v_cmd, w_cmd)
 
-        # Try to read incoming telemetry
-        self._read_telemetry(ser, cmd_state)
+        # Read incoming bytes and try to extract telemetry
+        self._read_bytes(ser)
+        self._try_extract_telemetry(cmd_state)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -99,6 +101,7 @@ class PiUartBridge:
         try:
             self._ser = serial.Serial(self.port, self.baud, timeout=0)
             logger.info("Connected to UART device %s @ %d", self.port, self.baud)
+            self._rx_buf.clear()  # Clear buffer on reconnect
         except SerialException as exc:
             logger.warning("UART open failed (%s); retrying in %.1fs", exc, self.reconnect_interval_s)
             self._ser = None
@@ -139,59 +142,63 @@ class PiUartBridge:
             finally:
                 self._ser = None
 
-    def _read_telemetry(self, ser: serial.Serial, cmd_state: CommandState) -> None:
-        """
-        Non-blocking read for telemetry frames from Pico.
-        """
+    def _read_bytes(self, ser: serial.Serial) -> None:
+        """Read any available bytes into the buffer."""
         try:
-            # Check if there's data available
-            if ser.in_waiting < 7:  # Minimum frame size: START1 START2 MSG_ID LEN_H LEN_L PAYLOAD_MIN CHECKSUM
-                return
-
-            # Read header
-            header = ser.read(5)
-            if len(header) != 5:
-                return
-
-            start1, start2, msg_id, len_hi, len_lo = header
-            if start1 != self.START1 or start2 != self.START2:
-                logger.warning("Invalid frame start bytes: %02x %02x", start1, start2)
-                return
-
-            length = (len_hi << 8) | len_lo
-            if length != self.TELEMETRY_LEN:
-                logger.warning("Unexpected telemetry payload length: %d", length)
-                return
-
-            # Read payload and checksum
-            payload_and_chk = ser.read(length + 1)
-            if len(payload_and_chk) != length + 1:
-                logger.warning("Incomplete telemetry frame")
-                return
-
-            payload = payload_and_chk[:-1]
-            chk = payload_and_chk[-1]
-
-            # Verify checksum
-            expected_chk = self._calc_checksum(msg_id, length, payload)
-            if chk != expected_chk:
-                logger.warning("Telemetry checksum mismatch: got %02x, expected %02x", chk, expected_chk)
-                return
-
-            # Unpack telemetry
-            if msg_id == self.MSG_ID_TELEMETRY:
-                telemetry = struct.unpack(self.TELEMETRY_FMT, payload)
-                cmd_state.update_telemetry(*telemetry)
-                logger.debug("Received telemetry: %s", telemetry)
-
+            data = ser.read(ser.in_waiting)
+            if data:
+                self._rx_buf.extend(data)
         except SerialException as exc:
             logger.warning("UART read failed (%s); closing serial", exc)
             try:
                 ser.close()
             finally:
                 self._ser = None
+
+    def _try_extract_telemetry(self, cmd_state: CommandState) -> None:
+        """Try to extract a telemetry packet from the buffer."""
+        buf = self._rx_buf
+
+        # Align to start bytes
+        while len(buf) >= 2 and not (buf[0] == self.START1 and buf[1] == self.START2):
+            buf[:] = buf[1:]
+
+        if len(buf) < 5:
+            return
+
+        msg_id = buf[2]
+        length = (buf[3] << 8) | buf[4]
+        if length != self.TELEMETRY_LEN:
+            # Length is wrong; drop the first byte to resync
+            logger.warning("Unexpected telemetry payload length: %d", length)
+            buf[:] = buf[1:]
+            return
+
+        total_len = 2 + 1 + 2 + length + 1  # start + msg_id + len + payload + chk
+
+        if len(buf) < total_len:
+            return
+
+        frame = buf[:total_len]
+        buf[:] = buf[total_len:]  # consume
+
+        chk = frame[-1]
+        calc = sum(frame[2:-1]) & 0xFF
+        if chk != calc:
+            logger.warning("Telemetry checksum mismatch: got %02x, expected %02x", chk, calc)
+            return
+
+        if msg_id != self.MSG_ID_TELEMETRY:
+            logger.warning("Unexpected msg_id: %02x", msg_id)
+            return
+
+        payload = frame[5:-1]
+        try:
+            telemetry = struct.unpack(self.TELEMETRY_FMT, payload)
+            cmd_state.update_telemetry(*telemetry)
+            logger.info("Received telemetry: %s", telemetry)
         except struct.error as exc:
-            logger.warning("Telemetry unpack failed (%s)", exc)
+            logger.warning("Telemetry unpack failed: %s", exc)
 
 
 def control_loop(
