@@ -193,6 +193,7 @@ class CommandState:
                 "gyro_x": self.telemetry.gyro_x,
                 "gyro_y": self.telemetry.gyro_y,
                 "gyro_z": self.telemetry.gyro_z,
+                "last_update_ts": self.telemetry.last_update_ts,
                 "age_s": now - self.telemetry.last_update_ts,
                 "valid": self.telemetry.valid,
             }

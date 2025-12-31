@@ -184,14 +184,14 @@ async def websocket_telemetry(websocket: WebSocket):
         snap = command_state.get_telemetry_snapshot()
         await websocket.send_json(snap)
 
-        last_update = snap["age_s"] if snap["valid"] else float('inf')
+        last_sent_ts = snap["last_update_ts"] if snap["valid"] else 0
 
         while True:
             # Check for new telemetry
             current_snap = command_state.get_telemetry_snapshot()
-            if current_snap["valid"] and current_snap["age_s"] < last_update:
+            if current_snap["valid"] and current_snap["last_update_ts"] > last_sent_ts:
                 await websocket.send_json(current_snap)
-                last_update = current_snap["age_s"]
+                last_sent_ts = current_snap["last_update_ts"]
 
             # Small delay to avoid busy loop
             await asyncio.sleep(0.1)

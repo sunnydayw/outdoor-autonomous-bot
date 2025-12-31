@@ -196,7 +196,6 @@ class PiUartBridge:
         try:
             telemetry = struct.unpack(self.TELEMETRY_FMT, payload)
             cmd_state.update_telemetry(*telemetry)
-            logger.info("Received telemetry: %s", telemetry)
         except struct.error as exc:
             logger.warning("Telemetry unpack failed: %s", exc)
 
