@@ -9,12 +9,12 @@
 #   - Maintain a heartbeat LED.
 #   - Print diagnostics periodically for first-run troubleshooting.
 
-from machine import Pin, I2C
+from machine import Pin, I2C, ADC
 from time import ticks_ms, ticks_diff, ticks_add, sleep_ms
 import config
 
 from drive_system import DriveSystem
-from pico_uart_comm import PicoVelocityReceiver
+from pico_uart_comm import PicoUARTComm
 from MPU6050 import MPU6050
 
 
@@ -30,6 +30,7 @@ CTRL_PERIOD_MS   = 50     # ~20 Hz drive control loop
 STATUS_PERIOD_MS = 500    # 2 Hz console diagnostics
 LED_PERIOD_MS    = 500    # 2 Hz heartbeat
 CMD_KEEPALIVE_MS = 200    # Refresh local cmd_vel (only if USE_UART_CMD=False)
+TELEMETRY_PERIOD_MS = 100  # 10 Hz telemetry send
 
 # UART config (all from config.py)
 UART_ID        = config.UART_ID
@@ -68,8 +69,11 @@ except Exception as e:
     if DEBUG_PRINT:
         print("IMU init failed or not present:", e)
 
+# Battery ADC
+battery_adc = ADC(Pin(config.BATTERY_ADC_PIN))
+
 # UART link to the Pi 5 (controller is the DriveSystem)
-uart_link = PicoVelocityReceiver(
+uart_link = PicoUARTComm(
     controller=drive,
     uart_id=UART_ID,
     baud=UART_BAUDRATE,
@@ -166,12 +170,14 @@ try:
     next_stat   = ticks_add(now, STATUS_PERIOD_MS)
     next_led    = ticks_add(now, LED_PERIOD_MS)
     next_cmd    = ticks_add(now, CMD_KEEPALIVE_MS)
+    next_tele   = ticks_add(now, TELEMETRY_PERIOD_MS)
     led_state   = 0
 
     if DEBUG_PRINT:
         print("Robot main loop starting.")
         print("  CTRL_PERIOD_MS   =", CTRL_PERIOD_MS)
         print("  STATUS_PERIOD_MS =", STATUS_PERIOD_MS)
+        print("  TELEMETRY_PERIOD_MS =", TELEMETRY_PERIOD_MS)
         print("  UART baud        =", UART_BAUDRATE)
         print("  USE_UART_CMD     =", USE_UART_CMD)
 
@@ -183,7 +189,36 @@ try:
             drive.update()
             next_ctrl = ticks_add(next_ctrl, CTRL_PERIOD_MS)
 
-        # 2) Incoming UART commands from Pi
+        # 2) Send telemetry to Pi
+        if ticks_diff(now, next_tele) >= 0:
+            dd = drive.controller.get_diagnostics()
+            left_target = dd["target_rpm"]["left"]
+            right_target = dd["target_rpm"]["right"]
+            left_actual = drive.left_encoder.rpm if hasattr(drive.left_encoder, "rpm") else 0.0
+            right_actual = drive.right_encoder.rpm if hasattr(drive.right_encoder, "rpm") else 0.0
+
+            # Battery voltage
+            adc_val = battery_adc.read_u16()
+            battery_voltage = (adc_val / 65535.0) * config.VREF * (1.0 / config.DIVIDER_RATIO)
+
+            # IMU data
+            if imu:
+                accel = imu.read_accel_data()
+                gyro = imu.read_gyro_data()
+            else:
+                accel = (0.0, 0.0, 0.0)
+                gyro = (0.0, 0.0, 0.0)
+
+            # Send telemetry
+            try:
+                uart_link.send_telemetry(left_target, right_target, left_actual, right_actual, battery_voltage, accel[0], accel[1], accel[2], gyro[0], gyro[1], gyro[2])
+            except Exception as e:
+                if DEBUG_PRINT:
+                    print("Telemetry send failed:", e)
+
+            next_tele = ticks_add(next_tele, TELEMETRY_PERIOD_MS)
+
+        # 3) Incoming UART commands from Pi
         if USE_UART_CMD:
             try:
                 uart_link.poll()

@@ -62,9 +62,10 @@ cd ~/apps/pi3-rover-1/dashboard
 source .venv/bin/activate
 python -m backend.main
 
+http://192.168.1.192:8000/static/teleop.html
+http://pi3-rover-1.local:8000
 
-# UART config
-
+# UART/Serial Port config
 sudo nano /boot/firmware/config.txt
 dtoverlay=disable-bt
 enable_uart=1
