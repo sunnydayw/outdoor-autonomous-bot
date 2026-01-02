@@ -48,9 +48,9 @@ Then wait for the user's input.
 2. **Spawn initial research tasks to gather context**:
    Before asking the user any questions, use specialized agents to research in parallel:
 
-   - Use the **codebase-locator** agent to find all files related to the ticket/task
-   - Use the **codebase-analyzer** agent to understand how the current implementation works
-   - If relevant, use the **thoughts-locator** agent to find any existing thoughts documents about this feature
+   - Use the **.ai/agents/codebase-locator.md** agent to find all files related to the ticket/task
+   - Use the **.ai/agents/codebase-analyzer.md** agent to understand how the current implementation works
+   - If relevant, use the **.ai/agents/thoughts-locator.md** agent to find any existing thoughts documents about this feature
 
    These agents will:
    - Find relevant source files, configs, and tests
@@ -103,12 +103,12 @@ After getting initial clarifications:
    - Use the right agent for each type of research:
 
    **For deeper investigation:**
-   - **codebase-locator** - To find more specific files (e.g., "find all files that handle [specific component]")
-   - **codebase-analyzer** - To understand implementation details (e.g., "analyze how [system] works")
+   - **.ai/agents/codebase-locator.md** - To find more specific files (e.g., "find all files that handle [specific component]")
+   - **.ai/agents/codebase-analyzer.md** - To understand implementation details (e.g., "analyze how [system] works")
 
    **For historical context:**
-   - **thoughts-locator** - To find any research, plans, or decisions about this area
-   - **thoughts-analyzer** - To extract key insights from the most relevant documents
+   - **.ai/agents/thoughts-locator.md** - To find any research, plans, or decisions about this area
+   - **.ai/agents/thoughts-analyzer.md** - To extract key insights from the most relevant documents
 
    Each agent knows how to:
    - Find the right files and code patterns
