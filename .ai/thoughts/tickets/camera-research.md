@@ -1,0 +1,2 @@
+I want to research the codebase using .ai/commands/research_codebase.md
+the goal is to reserach about the camera streaming setup in the folder "old_code" I plan to remove the code. the stream setup was working very well before, so i want to document the detialed before i remove the code and use it for the new dashboard.
