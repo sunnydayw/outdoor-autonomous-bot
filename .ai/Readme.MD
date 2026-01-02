@@ -2,6 +2,6 @@ References:
 - https://github.com/anthropics/skills
 - https://github.com/humanlayer/humanlayer
 
-add issue to the tickets folder and run the follow command:
-
-We need to fix a bug, See .ai/tickets/eng-1478.md
+Usage:
+ticket:  .ai/thoughts/tickets/eng-0001.md
+please create a plan to fix this ticket with .ai/commands/create_plan.md and implement the plan with .ai/commands/implement_plan.md
