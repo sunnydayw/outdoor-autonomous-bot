@@ -1,10 +1,10 @@
 ---
-description: Implement technical plans from thoughts/shared/plans with verification
+description: Implement technical plans from .ai/thoughts/plans with verification
 ---
 
 # Implement Plan
 
-You are tasked with implementing an approved technical plan from `thoughts/shared/plans/`. These plans contain phases with specific changes and success criteria.
+You are tasked with implementing an approved technical plan from `ai/thoughts/plans/`. These plans contain phases with specific changes and success criteria.
 
 ## Getting Started
 
@@ -43,16 +43,11 @@ If you encounter a mismatch:
 ## Verification Approach
 
 After implementing a phase:
-- Run the success criteria checks (usually `make check test` covers everything)
-- Fix any issues before proceeding
 - Update your progress in both the plan and your todos
 - Check off completed items in the plan file itself using Edit
-- **Pause for human verification**: After completing all automated verification for a phase, pause and inform the human that the phase is ready for manual testing. Use this format:
+- **Pause for human verification**: pause and inform the human that the phase is ready for manual testing. Use this format:
   ```
   Phase [N] Complete - Ready for Manual Verification
-
-  Automated verification passed:
-  - [List automated checks that passed]
 
   Please perform the manual verification steps listed in the plan:
   - [List manual verification items from the plan]
