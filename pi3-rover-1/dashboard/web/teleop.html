@@ -4,43 +4,71 @@
   <meta charset="UTF-8" />
   <title>Robot Teleop – v, ω Mapping</title>
   <style>
+    :root {
+      --bg: #0b0f0e;
+      --bg-glow: #141d1a;
+      --panel: #14181c;
+      --panel-strong: #191f24;
+      --panel-edge: #2b3339;
+      --text: #e6eef2;
+      --muted: #9aa7a5;
+      --accent: #7bf5b7;
+      --accent-blue: #7cb9ff;
+      --accent-warn: #f6c453;
+      --accent-danger: #f97373;
+      --font-body: "Avenir Next", "Avenir", "Trebuchet MS", "Segoe UI", sans-serif;
+      --font-display: "Rajdhani", "Avenir Next Condensed", "Trebuchet MS", sans-serif;
+      --font-mono: "IBM Plex Mono", "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
     body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: var(--font-body);
       margin: 1.5rem;
-      background: #111;
-      color: #eee;
+      background:
+        radial-gradient(1200px 600px at 10% -20%, rgba(123, 245, 183, 0.08), transparent 60%),
+        radial-gradient(900px 500px at 100% 0%, rgba(124, 185, 255, 0.08), transparent 55%),
+        var(--bg);
+      color: var(--text);
     }
     h1 {
       margin-bottom: 0.25rem;
+      font-family: var(--font-display);
+      font-size: 1.7rem;
+      letter-spacing: 0.02em;
     }
     #status {
       margin-bottom: 1rem;
-      padding: 0.5rem 0.75rem;
-      border-radius: 0.5rem;
-      background: #222;
+      padding: 0.6rem 0.8rem;
+      border-radius: 0.65rem;
+      background: linear-gradient(135deg, rgba(124, 185, 255, 0.08), rgba(15, 18, 20, 0.9));
+      border: 1px solid var(--panel-edge);
       font-size: 0.95rem;
     }
-    .ok   { color: #4ade80; }
-    .warn { color: #facc15; }
-    .err  { color: #f97373; }
+    .ok   { color: var(--accent); }
+    .warn { color: var(--accent-warn); }
+    .err  { color: var(--accent-danger); }
 
     .small {
-      font-size: 0.8rem;
-      opacity: 0.8;
+      font-size: 0.82rem;
+      opacity: 0.82;
+      color: var(--muted);
     }
     .card {
-      background: #181818;
-      border-radius: 0.75rem;
-      padding: 0.75rem 1rem;
+      background: linear-gradient(160deg, rgba(20, 24, 28, 0.95), rgba(15, 18, 20, 0.92));
+      border-radius: 0.85rem;
+      padding: 0.9rem 1.1rem;
       margin-top: 1.25rem;
-      border: 1px solid #333;
+      border: 1px solid var(--panel-edge);
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.25);
     }
     .card h2 {
       margin-top: 0;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.4rem;
+      font-family: var(--font-display);
+      letter-spacing: 0.03em;
     }
     .mono {
-      font-family: "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-family: var(--font-mono);
     }
     table {
       border-collapse: collapse;
@@ -51,11 +79,219 @@
       font-size: 0.9rem;
     }
     a {
-      color: #60a5fa;
+      color: var(--accent-blue);
       text-decoration: none;
     }
     a:hover {
       text-decoration: underline;
+    }
+
+    .telemetry {
+      position: relative;
+      overflow: hidden;
+    }
+    .telemetry::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(130deg, rgba(123, 245, 183, 0.06), transparent 40%);
+      opacity: 0.6;
+      pointer-events: none;
+    }
+    .telemetry-header {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem 1.2rem;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.9rem;
+    }
+    .telemetry-grid {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 0.9rem;
+    }
+    .telemetry-panel {
+      background: linear-gradient(150deg, rgba(28, 35, 38, 0.95), rgba(18, 22, 25, 0.9));
+      border-radius: 0.75rem;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 0.75rem 0.85rem;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+      animation: telemetry-rise 600ms ease both;
+    }
+    .telemetry-panel:nth-child(1) { animation-delay: 0ms; }
+    .telemetry-panel:nth-child(2) { animation-delay: 70ms; }
+    .telemetry-panel:nth-child(3) { animation-delay: 140ms; }
+    .telemetry-panel:nth-child(4) { animation-delay: 210ms; }
+
+    .panel-title {
+      font-family: var(--font-display);
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.16em;
+      color: rgba(230, 238, 242, 0.7);
+      margin-bottom: 0.5rem;
+    }
+    .stat-grid {
+      display: grid;
+      gap: 0.45rem 0.8rem;
+    }
+    .stat-grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .stat-grid.three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .stat {
+      background: rgba(10, 12, 14, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 0.55rem;
+      padding: 0.45rem 0.55rem;
+    }
+    .stat-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: rgba(154, 167, 165, 0.8);
+      margin-bottom: 0.25rem;
+    }
+    .stat-value {
+      font-size: 1rem;
+      font-family: var(--font-display);
+      color: var(--text);
+    }
+    .stat-value.mono {
+      font-family: var(--font-mono);
+      letter-spacing: 0.03em;
+    }
+    .stat-group {
+      margin-top: 0.6rem;
+    }
+    .group-title {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: rgba(154, 167, 165, 0.7);
+      margin-bottom: 0.4rem;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 120px;
+      padding: 0.4rem 0.7rem;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      font-size: 0.9rem;
+      font-family: var(--font-display);
+      letter-spacing: 0.05em;
+    }
+    .status-badge[data-state="connected"] {
+      color: var(--accent);
+      background: rgba(123, 245, 183, 0.12);
+      border-color: rgba(123, 245, 183, 0.3);
+    }
+    .status-badge[data-state="disconnected"] {
+      color: var(--accent-danger);
+      background: rgba(249, 115, 115, 0.12);
+      border-color: rgba(249, 115, 115, 0.35);
+    }
+    .status-badge[data-state="no-data"] {
+      color: var(--accent-warn);
+      background: rgba(246, 196, 83, 0.12);
+      border-color: rgba(246, 196, 83, 0.35);
+    }
+    .status-row {
+      margin-top: 0.6rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 0.6rem;
+      align-items: baseline;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .status-label {
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 0.65rem;
+      color: rgba(154, 167, 165, 0.75);
+    }
+    .status-value {
+      font-size: 0.9rem;
+      color: var(--text);
+    }
+
+    .battery-hero {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.6rem;
+    }
+    .battery-percent {
+      font-family: var(--font-display);
+      font-size: 2rem;
+      color: var(--accent);
+    }
+    .battery-voltage {
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+    .battery-bar {
+      margin-top: 0.5rem;
+      height: 0.45rem;
+      border-radius: 999px;
+      background: rgba(10, 12, 14, 0.6);
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .battery-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #f97373, #f6c453, #7bf5b7);
+      transition: width 200ms ease;
+    }
+    .battery-fill[data-level="high"] {
+      background: linear-gradient(90deg, #2dd4bf, #7bf5b7);
+    }
+    .battery-fill[data-level="mid"] {
+      background: linear-gradient(90deg, #f6c453, #f59e0b);
+    }
+    .battery-fill[data-level="low"] {
+      background: linear-gradient(90deg, #fb7185, #f97373);
+    }
+    .battery-meta {
+      margin-top: 0.5rem;
+      font-size: 0.75rem;
+      color: rgba(154, 167, 165, 0.7);
+    }
+
+    @keyframes telemetry-rise {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 720px) {
+      body {
+        margin: 1rem;
+      }
+      .telemetry-grid {
+        grid-template-columns: 1fr;
+      }
+      .battery-hero {
+        flex-direction: column;
+        align-items: flex-start;
+      }
     }
   </style>
 </head>
@@ -112,52 +348,100 @@
     </table>
   </div>
 
-  <div class="card">
-    <h2>Telemetry from Pico</h2>
-    <div class="small">
-      Real-time data from the robot: wheel RPMs, battery voltage, IMU readings.
+  <div class="card telemetry">
+    <div class="telemetry-header">
+      <div>
+        <h2>Telemetry from Pico</h2>
+        <div class="small">
+          Real-time data from the robot: wheel RPMs, battery voltage, IMU readings.
+        </div>
+      </div>
     </div>
 
-    <table>
-      <tbody>
-        <tr>
-          <th>Left Target RPM</th>
-          <td class="mono" id="left-target-rpm">–</td>
-          <th>Right Target RPM</th>
-          <td class="mono" id="right-target-rpm">–</td>
-        </tr>
-        <tr>
-          <th>Left Actual RPM</th>
-          <td class="mono" id="left-actual-rpm">–</td>
-          <th>Right Actual RPM</th>
-          <td class="mono" id="right-actual-rpm">–</td>
-        </tr>
-        <tr>
-          <th>Battery Voltage</th>
-          <td class="mono" id="battery-voltage">–</td>
-          <th>Status</th>
-          <td class="mono" id="telemetry-status">No data</td>
-        </tr>
-        <tr>
-          <th>Accel X (g)</th>
-          <td class="mono" id="accel-x">–</td>
-          <th>Accel Y (g)</th>
-          <td class="mono" id="accel-y">–</td>
-        </tr>
-        <tr>
-          <th>Accel Z (g)</th>
-          <td class="mono" id="accel-z">–</td>
-          <th>Gyro X (deg/s)</th>
-          <td class="mono" id="gyro-x">–</td>
-        </tr>
-        <tr>
-          <th>Gyro Y (deg/s)</th>
-          <td class="mono" id="gyro-y">–</td>
-          <th>Gyro Z (deg/s)</th>
-          <td class="mono" id="gyro-z">–</td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="telemetry-grid">
+      <section class="telemetry-panel status-panel">
+        <div class="panel-title">Status</div>
+        <div class="status-badge" id="telemetry-status" data-state="no-data">No data</div>
+        <div class="status-row">
+          <span class="status-label">Last update</span>
+          <span class="status-value mono" id="telemetry-last-seen">–</span>
+        </div>
+      </section>
+
+      <section class="telemetry-panel rpm-panel">
+        <div class="panel-title">Wheel RPM</div>
+        <div class="stat-grid two">
+          <div class="stat">
+            <div class="stat-label">Left Target</div>
+            <div class="stat-value mono" id="left-target-rpm">–</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Right Target</div>
+            <div class="stat-value mono" id="right-target-rpm">–</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Left Actual</div>
+            <div class="stat-value mono" id="left-actual-rpm">–</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Right Actual</div>
+            <div class="stat-value mono" id="right-actual-rpm">–</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="telemetry-panel imu-panel">
+        <div class="panel-title">IMU</div>
+        <div class="stat-group">
+          <div class="group-title">Acceleration (g)</div>
+          <div class="stat-grid three">
+            <div class="stat">
+              <div class="stat-label">X</div>
+              <div class="stat-value mono" id="accel-x">–</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Y</div>
+              <div class="stat-value mono" id="accel-y">–</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Z</div>
+              <div class="stat-value mono" id="accel-z">–</div>
+            </div>
+          </div>
+        </div>
+        <div class="stat-group">
+          <div class="group-title">Gyro (deg/s)</div>
+          <div class="stat-grid three">
+            <div class="stat">
+              <div class="stat-label">X</div>
+              <div class="stat-value mono" id="gyro-x">–</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Y</div>
+              <div class="stat-value mono" id="gyro-y">–</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Z</div>
+              <div class="stat-value mono" id="gyro-z">–</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="telemetry-panel battery-panel">
+        <div class="panel-title">Battery</div>
+        <div class="battery-hero">
+          <div class="battery-percent" id="battery-percent">–%</div>
+          <div class="battery-voltage">
+            <span class="mono" id="battery-voltage">–</span> V
+          </div>
+        </div>
+        <div class="battery-bar">
+          <div class="battery-fill" id="battery-fill" data-level="mid"></div>
+        </div>
+        <div class="battery-meta">0% at 9.0V, 100% at 12.5V</div>
+      </section>
+    </div>
   </div>
 
   <!-- Cache-busted so JS changes take effect without hard reloads -->

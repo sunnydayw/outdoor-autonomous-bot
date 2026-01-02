@@ -13,9 +13,20 @@ const DEADZONE = 0.05;  // used on STR, and as a tiny post-threshold cleanup on 
 // Teleop send rate (browser -> backend)
 const SEND_INTERVAL_MS = 5; // 20 Hz
 
+// Telemetry display behavior
+const TELEMETRY_STALE_MS = 1500;
+const TELEMETRY_STATUS_INTERVAL_MS = 250;
+
+// Battery percent mapping
+const BATTERY_MIN_V = 9.0;
+const BATTERY_MAX_V = 12.5;
+
 // === RUNTIME STATE ===
 let activeGamepad = null;
 let lastSendTime = 0;
+let lastTelemetryUpdateMs = null;
+let telemetryHasData = false;
+let telemetryWsConnected = false;
 
 // UI elements
 const statusEl     = document.getElementById("status");
@@ -35,6 +46,9 @@ const leftActualRpmEl = document.getElementById("left-actual-rpm");
 const rightActualRpmEl = document.getElementById("right-actual-rpm");
 const batteryVoltageEl = document.getElementById("battery-voltage");
 const telemetryStatusEl = document.getElementById("telemetry-status");
+const telemetryLastSeenEl = document.getElementById("telemetry-last-seen");
+const batteryPercentEl = document.getElementById("battery-percent");
+const batteryFillEl = document.getElementById("battery-fill");
 const accelXEl = document.getElementById("accel-x");
 const accelYEl = document.getElementById("accel-y");
 const accelZEl = document.getElementById("accel-z");
@@ -130,6 +144,74 @@ function sendTeleopCommand(vCmd, wCmd) {
   });
 }
 
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function formatAge(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return "–";
+  const seconds = ms / 1000;
+  if (seconds < 60) {
+    return `${seconds.toFixed(1)}s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remaining = Math.floor(seconds % 60);
+  return `${minutes}m ${remaining}s`;
+}
+
+function setTelemetryStatus(state, label) {
+  if (!telemetryStatusEl) return;
+  telemetryStatusEl.textContent = label;
+  telemetryStatusEl.dataset.state = state;
+}
+
+function updateBatteryUI(voltage) {
+  if (!batteryPercentEl || !batteryFillEl) return;
+  if (!Number.isFinite(voltage)) {
+    batteryPercentEl.textContent = "–%";
+    batteryFillEl.style.width = "0%";
+    batteryFillEl.dataset.level = "mid";
+    return;
+  }
+
+  const clamped = clamp(voltage, BATTERY_MIN_V, BATTERY_MAX_V);
+  const percent = (clamped - BATTERY_MIN_V) / (BATTERY_MAX_V - BATTERY_MIN_V);
+  const percentValue = Math.round(percent * 100);
+
+  batteryPercentEl.textContent = `${percentValue}%`;
+  batteryFillEl.style.width = `${percentValue}%`;
+
+  if (percentValue <= 20) {
+    batteryFillEl.dataset.level = "low";
+  } else if (percentValue <= 50) {
+    batteryFillEl.dataset.level = "mid";
+  } else {
+    batteryFillEl.dataset.level = "high";
+  }
+}
+
+function updateTelemetryStatus() {
+  if (!telemetryLastSeenEl || !telemetryStatusEl) return;
+  if (!telemetryHasData || !lastTelemetryUpdateMs) {
+    telemetryLastSeenEl.textContent = "–";
+    if (telemetryWsConnected) {
+      setTelemetryStatus("no-data", "No data");
+    } else {
+      setTelemetryStatus("disconnected", "Disconnected");
+    }
+    return;
+  }
+
+  const ageMs = Date.now() - lastTelemetryUpdateMs;
+  telemetryLastSeenEl.textContent = `${formatAge(ageMs)} ago`;
+
+  if (!telemetryWsConnected || ageMs > TELEMETRY_STALE_MS) {
+    setTelemetryStatus("disconnected", "Disconnected");
+  } else {
+    setTelemetryStatus("connected", "Connected");
+  }
+}
+
 // === WEBSOCKET FOR TELEMETRY ===
 
 let telemetryWs = null;
@@ -142,8 +224,8 @@ function connectTelemetryWebSocket() {
 
   telemetryWs.onopen = () => {
     console.log("Telemetry WebSocket connected");
-    telemetryStatusEl.textContent = "Connected";
-    telemetryStatusEl.style.color = "#4ade80"; // green
+    telemetryWsConnected = true;
+    updateTelemetryStatus();
   };
 
   telemetryWs.onmessage = (event) => {
@@ -157,8 +239,8 @@ function connectTelemetryWebSocket() {
 
   telemetryWs.onclose = () => {
     console.log("Telemetry WebSocket disconnected");
-    telemetryStatusEl.textContent = "Disconnected";
-    telemetryStatusEl.style.color = "#f97373"; // red
+    telemetryWsConnected = false;
+    updateTelemetryStatus();
     // Reconnect after a delay
     setTimeout(connectTelemetryWebSocket, 1000);
   };
@@ -169,7 +251,11 @@ function connectTelemetryWebSocket() {
 }
 
 function updateTelemetryUI(data) {
-  if (data.valid) {
+  const isValid = Boolean(data.valid);
+  telemetryHasData = isValid;
+
+  if (isValid) {
+    lastTelemetryUpdateMs = Date.now() - (data.age_s * 1000);
     leftTargetRpmEl.textContent = data.left_target_rpm.toFixed(1);
     rightTargetRpmEl.textContent = data.right_target_rpm.toFixed(1);
     leftActualRpmEl.textContent = data.left_actual_rpm.toFixed(1);
@@ -181,9 +267,9 @@ function updateTelemetryUI(data) {
     gyroXEl.textContent = data.gyro_x.toFixed(2);
     gyroYEl.textContent = data.gyro_y.toFixed(2);
     gyroZEl.textContent = data.gyro_z.toFixed(2);
-    telemetryStatusEl.textContent = `Valid (${data.age_s.toFixed(1)}s ago)`;
-    telemetryStatusEl.style.color = "#4ade80"; // green
+    updateBatteryUI(data.battery_voltage);
   } else {
+    lastTelemetryUpdateMs = null;
     // Clear values if invalid
     leftTargetRpmEl.textContent = "–";
     rightTargetRpmEl.textContent = "–";
@@ -196,9 +282,10 @@ function updateTelemetryUI(data) {
     gyroXEl.textContent = "–";
     gyroYEl.textContent = "–";
     gyroZEl.textContent = "–";
-    telemetryStatusEl.textContent = "No data";
-    telemetryStatusEl.style.color = "#facc15"; // yellow
+    updateBatteryUI(Number.NaN);
   }
+
+  updateTelemetryStatus();
 }
 
 // === MAIN LOOP ===
@@ -280,3 +367,6 @@ update();
 
 // Connect to telemetry WebSocket
 connectTelemetryWebSocket();
+
+// Periodically refresh telemetry status display
+setInterval(updateTelemetryStatus, TELEMETRY_STATUS_INTERVAL_MS);
