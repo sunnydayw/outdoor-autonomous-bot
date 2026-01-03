@@ -67,6 +67,102 @@
       font-family: var(--font-display);
       letter-spacing: 0.03em;
     }
+    .card.mapping {
+      position: relative;
+      overflow: hidden;
+    }
+    .card.mapping::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(600px 240px at 5% 0%, rgba(123, 245, 183, 0.08), transparent 55%);
+      pointer-events: none;
+    }
+    .mapping-header {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.6rem 1.2rem;
+    }
+    .mapping-grid {
+      position: relative;
+      z-index: 1;
+      margin-top: 0.85rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 0.9rem;
+    }
+    .mapping-panel {
+      background: linear-gradient(160deg, rgba(24, 30, 34, 0.92), rgba(16, 20, 22, 0.92));
+      border-radius: 0.7rem;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 0.75rem 0.85rem;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+    }
+    .mapping-panel.output {
+      border-color: rgba(123, 245, 183, 0.35);
+      box-shadow: 0 0 22px rgba(123, 245, 183, 0.08);
+    }
+    .mapping-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.35rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .mapping-row:last-child {
+      border-bottom: none;
+    }
+    .mapping-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: rgba(154, 167, 165, 0.8);
+    }
+    .mapping-value {
+      font-size: 1rem;
+      font-family: var(--font-display);
+      color: var(--text);
+    }
+    .output-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.6rem;
+      margin-top: 0.4rem;
+    }
+    .output-card {
+      background: rgba(10, 12, 14, 0.55);
+      border-radius: 0.6rem;
+      border: 1px solid rgba(123, 245, 183, 0.15);
+      padding: 0.6rem 0.65rem;
+    }
+    .output-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: rgba(154, 167, 165, 0.85);
+    }
+    .output-value {
+      margin-top: 0.3rem;
+      font-size: 1.4rem;
+      font-family: var(--font-display);
+      color: var(--accent);
+    }
+    .output-unit {
+      margin-top: 0.2rem;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: rgba(154, 167, 165, 0.75);
+    }
+    .mapping-foot {
+      margin-top: 0.6rem;
+      font-size: 0.78rem;
+      color: rgba(154, 167, 165, 0.8);
+    }
     .mono {
       font-family: var(--font-mono);
     }
@@ -310,42 +406,73 @@
     Debug view (raw axes/buttons): <a href="debug.html" target="_blank">open debug page</a>
   </div>
 
-  <div class="card">
-    <h2>Command Mapping (v, ω)</h2>
-    <div class="small">
-      Uses two axes to compute linear velocity v (m/s) and angular velocity ω (rad/s).<br />
-      FWD is clamped to ≥ 0 (no reverse): pushing forward → positive v, pulling back → v = 0.<br />
-      Positive ω turns left/CCW; stick left sends positive ω.
+  <div class="card mapping">
+    <div class="mapping-header">
+      <div>
+        <h2>Command Mapping (v, ω)</h2>
+        <div class="small">
+          Two axes drive linear velocity v (m/s) and angular velocity ω (rad/s).<br />
+          FWD is clamped to ≥ 0 (no reverse). Positive ω turns left/CCW.
+        </div>
+      </div>
     </div>
 
-    <table>
-      <tbody>
-        <tr>
-          <th>FWD axis index</th>
-          <td class="mono" id="cfg-fwd-axis">–</td>
-          <th>STR axis index</th>
-          <td class="mono" id="cfg-str-axis">–</td>
-        </tr>
-        <tr>
-          <th>Raw FWD</th>
-          <td class="mono" id="raw-fwd">0.00</td>
-          <th>Raw STR</th>
-          <td class="mono" id="raw-str">0.00</td>
-        </tr>
-        <tr>
-          <th>Norm FWD (≥0)</th>
-          <td class="mono" id="norm-fwd">0.00</td>
-          <th>Norm STR</th>
-          <td class="mono" id="norm-str">0.00</td>
-        </tr>
-        <tr>
-          <th>v_cmd (m/s)</th>
-          <td class="mono" id="v-cmd">0.000</td>
-          <th>ω_cmd (rad/s)</th>
-          <td class="mono" id="w-cmd">0.000</td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="mapping-grid">
+      <section class="mapping-panel">
+        <div class="panel-title">Axes</div>
+        <div class="mapping-row">
+          <span class="mapping-label">FWD axis index</span>
+          <span class="mapping-value mono" id="cfg-fwd-axis">–</span>
+        </div>
+        <div class="mapping-row">
+          <span class="mapping-label">STR axis index</span>
+          <span class="mapping-value mono" id="cfg-str-axis">–</span>
+        </div>
+      </section>
+
+      <section class="mapping-panel">
+        <div class="panel-title">Raw Input</div>
+        <div class="mapping-row">
+          <span class="mapping-label">Raw FWD</span>
+          <span class="mapping-value mono" id="raw-fwd">0.00</span>
+        </div>
+        <div class="mapping-row">
+          <span class="mapping-label">Raw STR</span>
+          <span class="mapping-value mono" id="raw-str">0.00</span>
+        </div>
+      </section>
+
+      <section class="mapping-panel">
+        <div class="panel-title">Normalized</div>
+        <div class="mapping-row">
+          <span class="mapping-label">Norm FWD (≥0)</span>
+          <span class="mapping-value mono" id="norm-fwd">0.00</span>
+        </div>
+        <div class="mapping-row">
+          <span class="mapping-label">Norm STR</span>
+          <span class="mapping-value mono" id="norm-str">0.00</span>
+        </div>
+      </section>
+
+      <section class="mapping-panel output">
+        <div class="panel-title">Command Output</div>
+        <div class="output-grid">
+          <div class="output-card">
+            <div class="output-label">v_cmd</div>
+            <div class="output-value mono" id="v-cmd">0.000</div>
+            <div class="output-unit">m/s</div>
+          </div>
+          <div class="output-card">
+            <div class="output-label">ω_cmd</div>
+            <div class="output-value mono" id="w-cmd">0.000</div>
+            <div class="output-unit">rad/s</div>
+          </div>
+        </div>
+        <div class="mapping-foot">
+          Stick left sends positive ω. Pulling back on FWD keeps v at 0.
+        </div>
+      </section>
+    </div>
   </div>
 
   <div class="card telemetry">

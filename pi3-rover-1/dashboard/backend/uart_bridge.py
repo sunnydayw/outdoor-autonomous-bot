@@ -168,9 +168,12 @@ class PiUartBridge:
 
         msg_id = buf[2]
         length = (buf[3] << 8) | buf[4]
+        if msg_id != self.MSG_ID_TELEMETRY:
+            # Resync quietly on non-telemetry frames/noise.
+            buf[:] = buf[1:]
+            return
         if length != self.TELEMETRY_LEN:
-            # Length is wrong; drop the first byte to resync
-            logger.warning("Unexpected telemetry payload length: %d", length)
+            # Length is wrong; drop the first byte to resync.
             buf[:] = buf[1:]
             return
 
@@ -186,10 +189,6 @@ class PiUartBridge:
         calc = sum(frame[2:-1]) & 0xFF
         if chk != calc:
             logger.warning("Telemetry checksum mismatch: got %02x, expected %02x", chk, calc)
-            return
-
-        if msg_id != self.MSG_ID_TELEMETRY:
-            logger.warning("Unexpected msg_id: %02x", msg_id)
             return
 
         payload = frame[5:-1]
