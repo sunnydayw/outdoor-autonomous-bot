@@ -71,6 +71,12 @@ except Exception as e:
 
 # Battery ADC
 battery_adc = ADC(Pin(config.BATTERY_ADC_PIN))
+# Battery ADC filter state
+BATTERY_AVG_WINDOW = max(1, config.BATTERY_AVG_WINDOW)
+battery_samples = [0] * BATTERY_AVG_WINDOW
+battery_sum = 0
+battery_index = 0
+battery_count = 0
 
 # UART link to the Pi 5 (controller is the DriveSystem)
 uart_link = PicoUARTComm(
@@ -199,7 +205,18 @@ try:
 
             # Battery voltage
             adc_val = battery_adc.read_u16()
-            battery_voltage = (adc_val / 65535.0) * config.VREF * (1.0 / config.DIVIDER_RATIO)
+            if battery_count < BATTERY_AVG_WINDOW:
+                battery_count += 1
+                battery_samples[battery_index] = adc_val
+                battery_sum += adc_val
+            else:
+                battery_sum -= battery_samples[battery_index]
+                battery_samples[battery_index] = adc_val
+                battery_sum += adc_val
+
+            battery_index = (battery_index + 1) % BATTERY_AVG_WINDOW
+            adc_avg = battery_sum / battery_count
+            battery_voltage = (adc_avg / 65535.0) * config.VREF * (1.0 / config.DIVIDER_RATIO)
 
             # IMU data
             if imu:

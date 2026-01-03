@@ -79,6 +79,7 @@ MOTOR2_IN2_PIN = 11   # GP11
 BATTERY_ADC_PIN = 28  # GP28 / ADC2
 VREF = 3.3
 DIVIDER_RATIO = 1 / 11
+BATTERY_AVG_WINDOW = 20  # number of ADC samples to average for battery voltage
 
 # — RPM calculation window — #
 WINDOW_MS       = 100  # how many ms of history to use for RPM smoothing
@@ -99,6 +100,5 @@ WHEEL_SEPARATION = WHEEL_SEPARATION_INCH * 0.0254  # Distance between wheels in 
 WHEEL_CIRCUMFERENCE = 2 * math.pi *WHEEL_RADIUS
 
 distance_per_pulse    = WHEEL_CIRCUMFERENCE / TICKS_PER_REV
-
 
 
