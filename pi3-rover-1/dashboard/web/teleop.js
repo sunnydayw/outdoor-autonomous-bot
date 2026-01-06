@@ -6,8 +6,8 @@ const FWD_AXIS_INDEX = 1; // stick up/down
 const STR_AXIS_INDEX = 0; // stick left/right
 
 // Max speeds and deadzone
-const V_MAX    = 0.30;  // m/s (linear speed)
-const W_MAX    = 1.50;  // rad/s (angular speed)
+const DEFAULT_LINEAR_MAX = 2.0;  // m/s (linear speed)
+const DEFAULT_ANGULAR_MAX = 2.0; // rad/s (angular speed)
 const DEADZONE = 0.05;  // used on STR, and as a tiny post-threshold cleanup on FWD
 
 // Teleop send rate (browser -> backend)
@@ -27,17 +27,21 @@ let lastSendTime = 0;
 let lastTelemetryUpdateMs = null;
 let telemetryHasData = false;
 let telemetryWsConnected = false;
+let vMax = DEFAULT_LINEAR_MAX;
+let wMax = DEFAULT_ANGULAR_MAX;
 
 // UI elements
 const statusEl     = document.getElementById("status");
-const cfgFwdAxisEl = document.getElementById("cfg-fwd-axis");
-const cfgStrAxisEl = document.getElementById("cfg-str-axis");
 const rawFwdEl     = document.getElementById("raw-fwd");
 const rawStrEl     = document.getElementById("raw-str");
 const normFwdEl    = document.getElementById("norm-fwd");
 const normStrEl    = document.getElementById("norm-str");
 const vCmdEl       = document.getElementById("v-cmd");
 const wCmdEl       = document.getElementById("w-cmd");
+const vMaxSlider   = document.getElementById("v-max-slider");
+const wMaxSlider   = document.getElementById("w-max-slider");
+const vMaxValueEl  = document.getElementById("v-max-value");
+const wMaxValueEl  = document.getElementById("w-max-value");
 
 // Telemetry UI elements
 const leftTargetRpmEl = document.getElementById("left-target-rpm");
@@ -56,8 +60,28 @@ const gyroXEl = document.getElementById("gyro-x");
 const gyroYEl = document.getElementById("gyro-y");
 const gyroZEl = document.getElementById("gyro-z");
 
-cfgFwdAxisEl.textContent = FWD_AXIS_INDEX;
-cfgStrAxisEl.textContent = STR_AXIS_INDEX;
+function setLimitDefaults() {
+  if (vMaxSlider) vMaxSlider.value = DEFAULT_LINEAR_MAX.toFixed(1);
+  if (wMaxSlider) wMaxSlider.value = DEFAULT_ANGULAR_MAX.toFixed(1);
+  vMax = DEFAULT_LINEAR_MAX;
+  wMax = DEFAULT_ANGULAR_MAX;
+  if (vMaxValueEl) vMaxValueEl.textContent = vMax.toFixed(1);
+  if (wMaxValueEl) wMaxValueEl.textContent = wMax.toFixed(1);
+}
+
+function bindLimitSlider(sliderEl, valueEl, setter) {
+  if (!sliderEl || !valueEl) return;
+  sliderEl.addEventListener("input", () => {
+    const value = parseFloat(sliderEl.value);
+    if (!Number.isFinite(value)) return;
+    setter(value);
+    valueEl.textContent = value.toFixed(1);
+  });
+}
+
+setLimitDefaults();
+bindLimitSlider(vMaxSlider, vMaxValueEl, (value) => { vMax = value; });
+bindLimitSlider(wMaxSlider, wMaxValueEl, (value) => { wMax = value; });
 
 function setStatus(text, cls) {
   statusEl.textContent = text;
@@ -328,9 +352,9 @@ function update() {
   // STR: symmetric left/right, deadzone around 0
   const normStr = applyDeadzone(rawStrAxis);
 
-  const vCmd = normFwd * V_MAX;
+  const vCmd = normFwd * vMax;
   // Map stick left (negative STR axis) to positive ω (CCW).
-  const wCmd = -normStr * W_MAX;
+  const wCmd = -normStr * wMax;
 
   // Update UI
   rawFwdEl.textContent  = rawFwdAxis.toFixed(2);
