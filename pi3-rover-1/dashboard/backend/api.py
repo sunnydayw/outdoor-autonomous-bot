@@ -4,7 +4,8 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
-from fastapi import WebSocket
+from fastapi import WebSocket, WebSocketDisconnect
+from starlette.websockets import WebSocketState
 from pydantic import BaseModel, Field
 from pathlib import Path
 import time
@@ -195,7 +196,10 @@ async def websocket_telemetry(websocket: WebSocket):
 
             # Small delay to avoid busy loop
             await asyncio.sleep(0.1)
+    except WebSocketDisconnect:
+        logger.info("Telemetry WebSocket disconnected")
     except Exception as e:
         logger.error("WebSocket error: %s", e)
     finally:
-        await websocket.close()
+        if websocket.application_state == WebSocketState.CONNECTED:
+            await websocket.close()
