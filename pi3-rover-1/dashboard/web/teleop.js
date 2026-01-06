@@ -317,14 +317,6 @@ function updateTelemetryUI(data) {
 function update() {
   const gp = getGamepad();
 
-  if (gp && (!activeGamepad || activeGamepad.index !== gp.index)) {
-    activeGamepad = gp;
-    setStatus(
-      `Gamepad active: "${gp.id}" (index ${gp.index}).`,
-      "ok"
-    );
-  }
-
   if (!gp) {
     setStatus(
       "No gamepad detected. Plug in the FrSky XSR-SIM and move a stick or press a button.",
