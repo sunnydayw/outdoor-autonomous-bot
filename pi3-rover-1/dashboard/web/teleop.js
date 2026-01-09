@@ -11,7 +11,7 @@ const DEFAULT_ANGULAR_MAX = 2.0; // rad/s (angular speed)
 const DEADZONE = 0.05;  // used on STR, and as a tiny post-threshold cleanup on FWD
 
 // Teleop send rate (browser -> backend)
-const SEND_INTERVAL_MS = 5; // 20 Hz
+const SEND_INTERVAL_MS = 50; // 20 Hz
 
 // Telemetry display behavior
 const TELEMETRY_STALE_MS = 1500;
@@ -29,6 +29,8 @@ let telemetryHasData = false;
 let telemetryWsConnected = false;
 let vMax = DEFAULT_LINEAR_MAX;
 let wMax = DEFAULT_ANGULAR_MAX;
+let pendingCmd = null;
+let sendInFlight = false;
 
 // UI elements
 const statusEl     = document.getElementById("status");
@@ -152,19 +154,35 @@ function mapFwd(raw) {
 
 // === BACKEND COMMUNICATION ===
 
-function sendTeleopCommand(vCmd, wCmd) {
+function queueTeleopCommand(vCmd, wCmd) {
+  pendingCmd = { vCmd, wCmd, timestamp_ms: Date.now() };
+  if (sendInFlight) return;
+  flushTeleopCommand();
+}
+
+function flushTeleopCommand() {
+  if (!pendingCmd || sendInFlight) return;
+  const payload = pendingCmd;
+  pendingCmd = null;
+  sendInFlight = true;
+
   fetch("/cmd_vel", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      v_cmd: vCmd,
-      w_cmd: wCmd,
-      timestamp_ms: Date.now(),
+      v_cmd: payload.vCmd,
+      w_cmd: payload.wCmd,
+      timestamp_ms: payload.timestamp_ms,
       source: "web_teleop"
     })
   }).catch((err) => {
     // Network errors only – backend 4xx/5xx still resolve the fetch promise
     console.error("Failed to send /cmd_vel:", err);
+  }).finally(() => {
+    sendInFlight = false;
+    if (pendingCmd) {
+      flushTeleopCommand();
+    }
   });
 }
 
@@ -367,7 +385,7 @@ function update() {
   // Fixed-rate send to backend (20 Hz)
   const now = performance.now();
   if (now - lastSendTime >= SEND_INTERVAL_MS) {
-    sendTeleopCommand(vCmd, wCmd);
+    queueTeleopCommand(vCmd, wCmd);
     lastSendTime = now;
   }
 
